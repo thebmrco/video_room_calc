@@ -4331,14 +4331,13 @@ function getQueryString() {
         canvasToJson();
     }, 1000)
 
-    // Check for collaboration mode via query parameter: ?collab=roomId or ?collab (uses roomObj.roomId)
-    if (urlParams.has('collab')) {
-        let collabRoomId = urlParams.get('collab');
-        // If collab param is empty, use the room's ID
-        if (!collabRoomId || collabRoomId === '' || collabRoomId === 'true') {
-            collabRoomId = roomObj.roomId;
+    // Auto-enable collaboration when scanId is provided (from RoomEditor iframe)
+    // This allows multiple users editing the same scan/design to see each other's changes
+    if (urlParams.has('scanId')) {
+        const scanId = urlParams.get('scanId');
+        if (scanId) {
+            initCollaboration(scanId);
         }
-        initCollaboration(collabRoomId);
     }
 
 }
