@@ -4331,6 +4331,73 @@ function getQueryString() {
         canvasToJson();
     }, 1000)
 
+    // Check for collaboration mode via query parameter: ?collab=roomId or ?collab (uses roomObj.roomId)
+    if (urlParams.has('collab')) {
+        let collabRoomId = urlParams.get('collab');
+        // If collab param is empty, use the room's ID
+        if (!collabRoomId || collabRoomId === '' || collabRoomId === 'true') {
+            collabRoomId = roomObj.roomId;
+        }
+        initCollaboration(collabRoomId);
+    }
+
+}
+
+/**
+ * Initialize real-time collaboration mode.
+ * @param {string} collabRoomId - The room ID to collaborate on
+ */
+function initCollaboration(collabRoomId) {
+    if (typeof VRCSync === 'undefined') {
+        console.warn('[VRC] VRCSync not available. Collaboration disabled.');
+        return;
+    }
+
+    // Get user info (could be enhanced to get from auth system)
+    const userId = localStorage.getItem('vrc_user_id') || generateUserId();
+    const userName = localStorage.getItem('vrc_user_name') || 'User ' + userId.substring(0, 4);
+
+    // Store for persistence
+    localStorage.setItem('vrc_user_id', userId);
+
+    console.log('[VRC] Enabling collaboration for room:', collabRoomId);
+
+    VRCSync.enable(collabRoomId, {
+        user: { id: userId, name: userName },
+        onRoomUpdate: (updatedRoomObj) => {
+            // Apply remote changes to local roomObj
+            Object.assign(roomObj, updatedRoomObj);
+        },
+        onRedraw: () => {
+            // Redraw the room when remote changes are received
+            drawRoom(true, true, true);
+        },
+        getRoomObj: () => roomObj
+    });
+}
+
+/**
+ * Generate a unique user ID for collaboration.
+ */
+function generateUserId() {
+    return 'user-' + Math.random().toString(36).substr(2, 9) + '-' + Date.now().toString(36);
+}
+
+/**
+ * Enable collaboration manually (can be called from console or UI).
+ * @param {string} roomId - Optional room ID (defaults to current roomObj.roomId)
+ */
+function enableCollaboration(roomId) {
+    initCollaboration(roomId || roomObj.roomId);
+}
+
+/**
+ * Disable collaboration.
+ */
+function disableCollaboration() {
+    if (typeof VRCSync !== 'undefined') {
+        VRCSync.disable();
+    }
 }
 
 function parseShortenedXYUrl(parameters) {
@@ -8916,6 +8983,11 @@ function saveToUndoArray() {
     setItemForLocalStorage('undoArray', JSON.stringify(undoArray.slice(-30)));  /* only store the last 30 items to local storage to save on space */
 
     postMessageToWorkspace();
+
+    // Sync changes to connected clients if collaboration is enabled
+    if (typeof VRCSync !== 'undefined' && VRCSync.isEnabled()) {
+        VRCSync.sync(roomObj);
+    }
 
 }
 
