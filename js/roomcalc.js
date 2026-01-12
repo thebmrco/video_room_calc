@@ -4333,11 +4333,16 @@ function getQueryString() {
 
     // Auto-enable collaboration when scanId is provided (from RoomEditor iframe)
     // This allows multiple users editing the same scan/design to see each other's changes
+    console.log('[VRC] Checking for scanId param. URL:', window.location.href);
+    console.log('[VRC] urlParams.has(scanId):', urlParams.has('scanId'));
     if (urlParams.has('scanId')) {
         const scanId = urlParams.get('scanId');
+        console.log('[VRC] Found scanId:', scanId);
         if (scanId) {
             initCollaboration(scanId);
         }
+    } else {
+        console.log('[VRC] No scanId param found, collaboration disabled');
     }
 
 }
@@ -4347,6 +4352,9 @@ function getQueryString() {
  * @param {string} collabRoomId - The room ID to collaborate on
  */
 function initCollaboration(collabRoomId) {
+    console.log('[VRC] initCollaboration called with roomId:', collabRoomId);
+    console.log('[VRC] VRCSync available:', typeof VRCSync !== 'undefined');
+
     if (typeof VRCSync === 'undefined') {
         console.warn('[VRC] VRCSync not available. Collaboration disabled.');
         return;
@@ -4359,7 +4367,7 @@ function initCollaboration(collabRoomId) {
     // Store for persistence
     localStorage.setItem('vrc_user_id', userId);
 
-    console.log('[VRC] Enabling collaboration for room:', collabRoomId);
+    console.log('[VRC] Enabling collaboration for room:', collabRoomId, 'user:', userId, userName);
 
     VRCSync.enable(collabRoomId, {
         user: { id: userId, name: userName },

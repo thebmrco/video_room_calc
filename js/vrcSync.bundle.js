@@ -226,12 +226,14 @@
     }
 
     function connectWebSocket(url) {
+      console.log('[YjsProvider] Attempting WebSocket connection to:', url);
       try {
         wsProvider = new WebSocket(url);
         wsProvider.binaryType = 'arraybuffer';
+        console.log('[YjsProvider] WebSocket object created, readyState:', wsProvider.readyState);
 
         wsProvider.onopen = () => {
-          console.log('[YjsProvider] WebSocket connected');
+          console.log('[YjsProvider] WebSocket CONNECTED successfully');
           connectionStatus = 'connected';
           reconnectAttempts = 0;
           notifyConnectionListeners('connected');
@@ -239,19 +241,21 @@
         };
 
         wsProvider.onclose = (event) => {
-          console.log('[YjsProvider] WebSocket closed:', event.code, event.reason);
+          console.log('[YjsProvider] WebSocket CLOSED - code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean);
           connectionStatus = 'disconnected';
           notifyConnectionListeners('disconnected');
           scheduleReconnect(url);
         };
 
         wsProvider.onerror = (error) => {
-          console.error('[YjsProvider] WebSocket error:', error);
+          console.error('[YjsProvider] WebSocket ERROR:', error);
+          console.error('[YjsProvider] WebSocket readyState on error:', wsProvider ? wsProvider.readyState : 'null');
           connectionStatus = 'disconnected';
           notifyConnectionListeners('disconnected');
         };
 
         wsProvider.onmessage = (event) => {
+          console.log('[YjsProvider] WebSocket MESSAGE received, size:', event.data.byteLength || event.data.length);
           handleMessage(event.data);
         };
       } catch (error) {
