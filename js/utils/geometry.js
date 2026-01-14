@@ -148,6 +148,33 @@ export function closestPointOnSegment(px, py, x1, y1, x2, y2) {
 }
 
 // ============================================
+// TRIGONOMETRY CALCULATIONS
+// ============================================
+
+/**
+ * Calculate distance A in a right triangle using opposite/adjacent ratio.
+ * Formula: distanceA = distanceB / tan(degreeB)
+ * Reference: https://www2.clarku.edu/faculty/djoyce/trig/right.html
+ * @param {number} degreeB - Angle B in degrees
+ * @param {number} distanceB - Length of side B (opposite to angle B)
+ * @returns {number} Length of side A (adjacent to angle B)
+ */
+export function getDistanceA(degreeB, distanceB) {
+  return distanceB / Math.tan(degreesToRadians(degreeB));
+}
+
+/**
+ * Calculate distance B in a right triangle using opposite/adjacent ratio.
+ * Formula: distanceB = tan(degreeB) * distanceA
+ * @param {number} degreeB - Angle B in degrees
+ * @param {number} distanceA - Length of side A (adjacent to angle B)
+ * @returns {number} Length of side B (opposite to angle B)
+ */
+export function getDistanceB(degreeB, distanceA) {
+  return Math.tan(degreesToRadians(degreeB)) * distanceA;
+}
+
+// ============================================
 // DISTANCE CALCULATIONS
 // ============================================
 
@@ -353,6 +380,68 @@ export function getBoundingBox(points) {
 }
 
 // ============================================
+// ITEM/SHAPE COORDINATE HELPERS
+// ============================================
+
+/**
+ * Find the upper-left corner coordinates of a rotated shape.
+ * Takes a shape with center (x,y), width, height, and rotation.
+ * @param {object} shape - Shape with x, y, width, height, rotation properties
+ * @returns {object} Upper-left coordinates {x, y}
+ */
+export function findUpperLeftXY(shape) {
+  return {
+    x:
+      shape.x
+      - (shape.width / 2) * Math.cos(Math.PI / 180 * shape.rotation)
+      - (shape.height / 2) * Math.sin(Math.PI / 180 * (-shape.rotation)),
+    y:
+      shape.y -
+      (shape.height / 2) * Math.cos(Math.PI / 180 * shape.rotation) -
+      (shape.width / 2) * Math.sin(Math.PI / 180 * shape.rotation)
+  };
+}
+
+/**
+ * Find new coordinates after applying offset transformation based on rotation.
+ * @param {object} item - Item with x, y, and rotation properties
+ * @param {number} deltaX - X offset to apply
+ * @param {number} deltaY - Y offset to apply
+ * @returns {object} New coordinates {x, y}
+ */
+export function findNewTransformationCoordinate(item, deltaX, deltaY) {
+  return {
+    x:
+      item.x
+      - (deltaX) * Math.cos(Math.PI / 180 * item.rotation)
+      - (deltaY) * Math.sin(Math.PI / 180 * (-item.rotation)),
+    y:
+      item.y -
+      (deltaY) * Math.cos(Math.PI / 180 * item.rotation) -
+      (deltaX) * Math.sin(Math.PI / 180 * item.rotation)
+  };
+}
+
+/**
+ * Get center of an item from upper-left x, y coordinates.
+ * Used for items in roomObj.items[] which use upper-left as origin.
+ * @param {object} item - Item with x, y, width, height, rotation properties
+ * @returns {object} Center coordinates {x, y}
+ */
+export function getItemCenter(item) {
+  return {
+    x:
+      item.x
+      + (item.width / 2) * Math.cos(Math.PI / 180 * item.rotation)
+      + (item.height / 2) * Math.sin(Math.PI / 180 * (-item.rotation)),
+    y:
+      item.y +
+      (item.height / 2) * Math.cos(Math.PI / 180 * item.rotation) +
+      (item.width / 2) * Math.sin(Math.PI / 180 * item.rotation)
+  };
+}
+
+// ============================================
 // UTILITY FUNCTIONS
 // ============================================
 
@@ -400,6 +489,8 @@ if (typeof window !== 'undefined') {
     rotatePointAroundOrigin,
     findEndPointCoordinates,
     closestPointOnSegment,
+    getDistanceA,
+    getDistanceB,
     distance,
     distancePoints,
     distanceSquared,
@@ -409,6 +500,9 @@ if (typeof window !== 'undefined') {
     polylineSelfIntersects,
     getPolygonCenter,
     getBoundingBox,
+    findUpperLeftXY,
+    findNewTransformationCoordinate,
+    getItemCenter,
     clamp,
     lerp,
     roundTo
