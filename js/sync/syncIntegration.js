@@ -185,7 +185,9 @@ function performSync(roomObj) {
       authorVersion: roomObjCopy.authorVersion,
       workspace: roomObjCopy.workspace,
       layersVisible: roomObjCopy.layersVisible,
-      roomSurfaces: roomObjCopy.roomSurfaces
+      roomSurfaces: roomObjCopy.roomSurfaces,
+      arMaps: roomObjCopy.arMaps,
+      activeArMapId: roomObjCopy.activeArMapId
     };
 
     // Update Yjs shared data
@@ -249,6 +251,14 @@ function createSyncableRoomObj(roomObj) {
     copy.roomSurfaces = JSON.parse(JSON.stringify(roomObj.roomSurfaces));
   }
 
+  // Copy AR World Maps
+  if (roomObj.arMaps) {
+    copy.arMaps = JSON.parse(JSON.stringify(roomObj.arMaps));
+  }
+  if (roomObj.activeArMapId !== undefined) {
+    copy.activeArMapId = roomObj.activeArMapId;
+  }
+
   // Copy items (deep clone to avoid references)
   if (roomObj.items) {
     copy.items = {};
@@ -304,6 +314,14 @@ export function applyRemoteRoomData(localRoomObj, remoteRoomData) {
   // Apply room surfaces
   if (remoteRoomData.roomSurfaces) {
     updated.roomSurfaces = { ...remoteRoomData.roomSurfaces };
+  }
+
+  // Apply AR World Maps
+  if (remoteRoomData.arMaps) {
+    updated.arMaps = JSON.parse(JSON.stringify(remoteRoomData.arMaps));
+  }
+  if (remoteRoomData.activeArMapId !== undefined) {
+    updated.activeArMapId = remoteRoomData.activeArMapId;
   }
 
   return updated;

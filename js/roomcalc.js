@@ -142,6 +142,9 @@ let defaultRoomSurfaces = {
 
 roomObj.roomSurfaces = structuredClone(defaultRoomSurfaces);
 
+/* AR World Maps - stores uploaded AR world maps for the room */
+roomObj.arMaps = []; /* Array of AR world map objects: { id, name, fileData, createdAt } */
+roomObj.activeArMapId = null; /* ID of the currently active AR world map */
 
 let unit = roomObj.unit;
 
@@ -4910,6 +4913,166 @@ function deleteBackgroundImage() {
 
 }
 
+// ============================================
+// AR WORLD MAP FUNCTIONS
+// ============================================
+
+/**
+ * Upload a new AR world map and optionally set it as active.
+ * By default, newly uploaded maps are automatically activated.
+ *
+ * @param {File} file - The AR world map file to upload
+ * @param {Object} options - Optional configuration
+ * @param {boolean} options.activate - Whether to activate the map after upload (default: true)
+ * @param {string} options.name - Custom name for the map (default: file name)
+ * @returns {Promise<Object>} The created AR map object
+ */
+function uploadArMap(file, options = {}) {
+    return new Promise((resolve, reject) => {
+        if (!file) {
+            reject(new Error('No file provided'));
+            return;
+        }
+
+        const { activate = true, name = file.name } = options;
+
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const arMap = {
+                id: createUuid(),
+                name: name,
+                fileData: e.target.result,
+                createdAt: new Date().toISOString(),
+                fileSize: file.size,
+                fileType: file.type
+            };
+
+            // Add the map to the array
+            if (!roomObj.arMaps) {
+                roomObj.arMaps = [];
+            }
+            roomObj.arMaps.push(arMap);
+
+            // Auto-activate the map unless explicitly disabled
+            if (activate) {
+                setActiveArMap(arMap.id);
+            }
+
+            console.log('[VRC] AR World Map uploaded:', arMap.name, 'Active:', activate);
+
+            // Trigger save/sync
+            canvasToJson();
+
+            resolve(arMap);
+        };
+
+        reader.onerror = function(e) {
+            console.error('[VRC] Error reading AR World Map file:', e);
+            reject(new Error('Failed to read AR World Map file'));
+        };
+
+        reader.readAsDataURL(file);
+    });
+}
+
+/**
+ * Set an AR world map as the active map.
+ *
+ * @param {string} mapId - The ID of the AR map to activate
+ * @returns {boolean} True if successful, false if map not found
+ */
+function setActiveArMap(mapId) {
+    if (!roomObj.arMaps || roomObj.arMaps.length === 0) {
+        console.warn('[VRC] No AR maps available');
+        return false;
+    }
+
+    const map = roomObj.arMaps.find(m => m.id === mapId);
+    if (!map) {
+        console.warn('[VRC] AR map not found:', mapId);
+        return false;
+    }
+
+    roomObj.activeArMapId = mapId;
+    console.log('[VRC] Active AR World Map set to:', map.name);
+
+    // Trigger save/sync
+    canvasToJson();
+
+    return true;
+}
+
+/**
+ * Get the currently active AR world map.
+ *
+ * @returns {Object|null} The active AR map object, or null if none active
+ */
+function getActiveArMap() {
+    if (!roomObj.activeArMapId || !roomObj.arMaps) {
+        return null;
+    }
+
+    return roomObj.arMaps.find(m => m.id === roomObj.activeArMapId) || null;
+}
+
+/**
+ * Get all AR world maps.
+ *
+ * @returns {Array} Array of AR map objects
+ */
+function getArMaps() {
+    return roomObj.arMaps || [];
+}
+
+/**
+ * Delete an AR world map by ID.
+ * If the deleted map was active, clears the active map.
+ *
+ * @param {string} mapId - The ID of the AR map to delete
+ * @returns {boolean} True if deleted, false if not found
+ */
+function deleteArMap(mapId) {
+    if (!roomObj.arMaps) {
+        return false;
+    }
+
+    const index = roomObj.arMaps.findIndex(m => m.id === mapId);
+    if (index === -1) {
+        console.warn('[VRC] AR map not found for deletion:', mapId);
+        return false;
+    }
+
+    const deletedMap = roomObj.arMaps[index];
+    roomObj.arMaps.splice(index, 1);
+
+    // If the deleted map was active, clear active status
+    if (roomObj.activeArMapId === mapId) {
+        roomObj.activeArMapId = null;
+    }
+
+    console.log('[VRC] AR World Map deleted:', deletedMap.name);
+
+    // Trigger save/sync
+    canvasToJson();
+
+    return true;
+}
+
+/**
+ * Clear all AR world maps.
+ */
+function clearArMaps() {
+    roomObj.arMaps = [];
+    roomObj.activeArMapId = null;
+    console.log('[VRC] All AR World Maps cleared');
+    canvasToJson();
+}
+
+// ============================================
+// END AR WORLD MAP FUNCTIONS
+// ============================================
+
 function resetRoomObj() {
 
     roomObj.name = ''; /* Pre-creating objects now so the order shows up on top in JSON file. */
@@ -4957,6 +5120,9 @@ function resetRoomObj() {
     }
 
     deleteBackgroundImage();
+
+    /* Clear AR World Maps */
+    clearArMaps();
 
     /* reset fields */
 
