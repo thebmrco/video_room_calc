@@ -16191,10 +16191,11 @@ function importWorkspaceDesignerFile(workspaceObj) {
                 }
             }
 
-            /* iterate throught the workspaceKey and find the best match on import. objecType > idRegex > model > mount > scale[x,x,x]> size > scale[1,1,1] */
-            for (let key in workspaceKey) {
+            /* iterate through all devices and find the best match on import. objecType > idRegex > model > mount > scale[x,x,x]> size > scale[1,1,1] */
+            const allDevices = DeviceCatalog.getAllDeviceTypes();
+            for (let key in allDevices) {
                 let hits = 0;
-                let keyItem = workspaceKey[key];
+                let keyItem = allDevices[key]?.workspaceDesigner || {};
                 let modifiedWdItem = structuredClone(wdItem);
 
                 if ((keyItem.objectType === wdItem.objectType)) {
@@ -17833,6 +17834,11 @@ function isObjectEmpty(obj) {
 
 // Export functions to window for HTML onclick handlers (required for ES modules)
 Object.assign(window, {
+    // Import/Export (for iframe embedding)
+    importWorkspaceDesignerFile,
+    exportRoomObjToWorkspace,
+    drawRoom,
+
     // Dialog and navigation
     openNewRoomDialog,
     openSaveDialog,
