@@ -1,3 +1,76 @@
+// ES Module imports - consolidated via index files
+
+// Utilities (geometry, unit conversion, common helpers)
+import {
+    // Geometry
+    lineAngleDegrees,
+    findEndPointCoordinates,
+    getVectorAngleDegrees,
+    normalizeDegree,
+    rotatePointAroundOrigin,
+    getDistanceA,
+    getDistanceB,
+    // Unit conversion
+    parseInput as convertToUnit,
+    feetToMeters,
+    metersToFeet,
+    // Common utilities
+    createUuid,
+    createRoomId,
+    isNumeric,
+    round,
+    getNumberValue,
+    isTouchEnabled,
+    hasScrollbar,
+    getFullHeightIncludingMargin,
+    deepCopyNode
+} from './utils/index.js';
+
+// Core modules (constants, coverage toggle)
+import {
+    UNITS,
+    UNIT_CONVERSION,
+    CANVAS_DEFAULTS,
+    TIMING,
+    ROOM_DEFAULTS,
+    UI_COLORS,
+    ROTATION_SNAPS,
+    toggleCoverageSingleItem
+} from './core/index.js';
+
+// Event handlers
+import { KeyboardHandlers } from './events/index.js';
+
+// Templates
+import templates from './templates.js';
+
+// Device Catalog and Workspace mappings
+import { DeviceCatalog, DISPLAY_DEFAULTS, StaticDeviceProvider } from './data/index.js';
+
+// Workspace Designer export
+import {
+    exportRoomObjToWorkspace as exportRoomObjToWorkspaceCore,
+    convertToMeters as convertToMetersCore,
+    parseDataLabelFieldJson,
+    addDefaultsToWorkspaceObj,
+    downloadJsonWorkspaceFile as downloadJsonWorkpaceFile
+} from './workspace/index.js';
+
+// Proxy for workspaceKey to maintain backward compatibility
+// Now uses workspaceDesigner property from device catalog
+const workspaceKey = new Proxy({}, {
+    get(target, deviceId) {
+        return DeviceCatalog.getWorkspaceDesigner(deviceId);
+    },
+    set(target, deviceId, value) {
+        DeviceCatalog.setWorkspaceDesigner(deviceId, value);
+        return true;
+    }
+});
+
+// Register the static device provider (can be replaced with REST provider later)
+DeviceCatalog.registerProvider(StaticDeviceProvider);
+
 const version = "v0.1.637";  /* format example "v0.1" or "v0.2.3" - ver 0.1.1 and 0.1.2 should be compatible with a Shareable Link because ver, v0.0, 0.1 and ver 0.2 are not compatible. */
 const isCacheImages = true; /* Images for Canvas are preloaded in case of network disruption while being mobile. Turn to false to save server downloads */
 let perfectDrawEnabled = false; /* Konva setting. Turning off helps with performance but reduces image quality of canvas.  */
@@ -186,6 +259,7 @@ let testProduction = false; /* For forcing to test production crosslaunch */
 let testNew = false; /* used to toggle on new features */
 let testiFrame = false; /* testing iFrame settings, only works on internal Cisco Workspace Designer test site */
 let testiFrameInitialized = false; /* Keep track if the testing iFrame settings */
+let hideNewRoomDialog = false; /* When true, suppresses the new room dialog (useful when embedded in iframe) */
 let testOffset = false; /* shows a field that configures xOffset and yOffset which is used in the items workspaceKey */
 
 let zoomScaleX = 1;  /* zoomScaleX zoomScaleY used clicking the + or - button to zoom. */
@@ -235,15 +309,8 @@ let isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
 let scrollContainer = document.getElementById('scroll-container');
 
 /* mm - displayDepth, DisplayHeight, displayWidth, diagonalInches are used as a ratio to determine size of display based on diagonal inches */
-let displayDepth = 90;
-let displayHeight = 695;
-let displayWidth = 1223;
-let diagonalInches = 55; /* inches */
-
-let displayDepth21_9 = 90;
-let displayHeight21_9 = 1073;
-let displayWidth21_9 = 2490;
-let diagonalInches21_9 = 105;
+const { displayDepth, displayHeight, displayWidth, diagonalInches,
+        displayDepth21_9, displayHeight21_9, displayWidth21_9, diagonalInches21_9 } = DISPLAY_DEFAULTS;
 
 /*************************************************/
 
@@ -252,225 +319,6 @@ let canvasPixel = {};
 canvasPixel.x = 0;
 canvasPixel.y = 0;
 
-
-/** Workspace Designer keys: workspaceKeys
- *
- *  The Workspace Desinger and Video Room Calc have different coordinate systems
- *  VRC x = Designer x
- *  VRC y = Designer z
- *  VRC data_zPosition = Designer y
- *  Rotation: VRC degrees = Designer -1*(radians)
- *
- *  In the below workspaceKeys
- *  vertOffset: In meters, VRC data_zPosition value added when exporting to the Workspace Designer
- *  yOffset: In meters, refers to the VRC y difference between the VRC & Desinger per an object before
- *
- *  role: below is the default role, but can be overridden.
- *  **/
-
-workspaceKey = {};
-
-workspaceKey.unknownObj = {}; /* Workspace Designer Unkown Objects on import */
-workspaceKey.tblUnknownObj = {}; /* Workspace Designer Unkown Objects on import with width and length */
-
-workspaceKey.switch = { objectType: 'switch' };
-
-workspaceKey.switchC9200CX = { objectType: 'switch', model: "Catalyst 9200CX Series" };
-
-workspaceKey.switchC1200 = { objectType: 'switch', model: 'Catalyst 1200 Series' }
-
-
-workspaceKey.codec = { objectType: 'codec' };
-
-workspaceKey.codecEQX = { objectType: 'codec', model: 'EQX' };
-workspaceKey.codecEQ = { objectType: 'codec', model: 'Room Kit EQ' };
-workspaceKey.codecPro = { objectType: 'codec', model: 'Room Kit Pro' };
-
-workspaceKey.phoneUnknown = { objectType: 'phone', role: "phone", yOffset: -0.1, xOffset: -0.04 };
-
-workspaceKey.phone9841 = { objectType: 'phone', model: "9841", role: "phone", yOffset: -0.1, xOffset: -0.04 };
-
-workspaceKey.phone9851 = { objectType: 'phone', model: "9851", role: "phone", yOffset: -0.1, xOffset: -0.04 };
-
-workspaceKey.phone9861 = { objectType: 'phone', model: "9861", role: "phone", yOffset: -0.1, xOffset: -0.04 };
-
-workspaceKey.phone9871 = { objectType: 'phone', model: "9871", role: "phone", yOffset: -0.1, xOffset: -0.04 };
-
-workspaceKey.roomBar = { objectType: 'videoDevice', model: 'Room Bar', color: 'light', mount: "wall", yOffset: 0.032 };
-workspaceKey.roomBarPro = { objectType: 'videoDevice', model: 'Room Bar Pro', color: 'light', mount: "wall", yOffset: 0.045 };
-workspaceKey.roomKitEqx = { objectType: 'videoDevice', model: 'EQX', mount: 'wall', color: 'dark', mount: "wall", yOffset: 0.076 };
-workspaceKey.roomBarByod = { objectType: 'videoDevice', model: 'Room Bar BYOD', color: 'light', mount: "wall", yOffset: 0.032 };
-
-workspaceKey.roomKitEqQuadCam = { objectType: 'videoDevice', model: 'Room Kit EQ', color: 'light', mount: "wall", yOffset: 0.051 };
-workspaceKey.roomKitEqQuadCamExt = { objectType: 'videoDevice', model: 'Room Kit EQ', color: 'light', mount: "wall", yOffset: 0.051 };
-
-
-workspaceKey.roomKitProQuadCam = { objectType: 'videoDevice', model: 'Room Kit Pro', mount: "wall", color: 'light' };
-
-workspaceKey.boardPro55 = { objectType: 'videoDevice', model: 'Legacy', mount: 'wall', size: 55, role: 'firstScreen', yOffset: 0.046, scale: [1.4, 7, 0.5] };
-workspaceKey.boardPro75 = { objectType: 'videoDevice', model: 'Legacy', mount: 'wall', size: 75, role: 'firstScreen', yOffset: 0.0475, scale: [1.8, 9.1, 0.5] };
-
-workspaceKey.brdPro55G2 = { objectType: 'videoDevice', model: 'Board Pro', mount: 'wall', size: 55, role: 'firstScreen', yOffset: 0.046 };
-workspaceKey.brdPro55G2FS = { objectType: 'videoDevice', model: 'Board Pro', mount: 'floor', size: 55, role: 'firstScreen', yOffset: 0.475 };
-workspaceKey.brdPro75G2 = { objectType: 'videoDevice', model: 'Board Pro', mount: 'wall', size: 75, role: 'firstScreen', yOffset: 0.0475 };
-workspaceKey.brdPro75G2FS = { objectType: 'videoDevice', model: 'Board Pro', mount: 'floor', size: 75, role: 'firstScreen', yOffset: 0.475 };
-workspaceKey.brdPro75G2Wheel = { objectType: 'videoDevice', model: 'Board Pro', mount: 'wheelstand', size: 75, role: 'firstScreen', yOffset: 0.475 };
-workspaceKey.brdPro55G2Wheel = { objectType: 'videoDevice', model: 'Board Pro', mount: 'wheelstand', size: 55, role: 'firstScreen', yOffset: 0.475 };
-
-workspaceKey.brdPro55G2WS = { objectType: 'videoDevice', model: 'Board Pro', mount: 'wallstand', size: 55, role: 'firstScreen', yOffset: 0.046 };
-workspaceKey.brdPro75G2WS = { objectType: 'videoDevice', model: 'Board Pro', mount: 'wallstand', size: 75, role: 'firstScreen', yOffset: 0.0475 };
-
-workspaceKey.webexDesk = { objectType: 'videoDevice', model: 'Desk', role: 'singleScreen', yOffset: -0.08 };
-workspaceKey.webexDeskPro = { objectType: 'videoDevice', model: 'Desk Pro', role: 'singleScreen' };
-workspaceKey.webexDeskMini = { objectType: 'videoDevice', model: 'Desk Mini', role: 'singleScreen' };
-
-workspaceKey.room55 = { objectType: 'videoDevice', model: 'Legacy', scale: [1.5, 12, 0.5] };
-workspaceKey.rmKitMini = { objectType: 'videoDevice', model: 'Legacy', scale: [0.55, 0.9, 0.9] };
-workspaceKey.roomKit = { objectType: 'videoDevice', model: 'Legacy', scale: [0.75, 0.95, 0.95] };
-
-workspaceKey.roomKitEqxFS = { objectType: 'videoDevice', model: 'EQX', mount: 'floor', yOffset: 0.44 };
-workspaceKey.roomKitEqxWS = { objectType: 'videoDevice', model: 'EQX', mount: 'wallstand', yOffset: 0.062 };
-
-workspaceKey.cameraP60 = { objectType: 'videoDevice', model: 'Legacy', scale: [0.25, 1.5, 1] };
-
-workspaceKey.quadCam = { objectType: 'quadcam', role: 'crossview', yOffset: 0.076 };
-workspaceKey.quadCamExt = { objectType: 'quadcam', role: 'crossview', yOffset: 0.076 };
-workspaceKey.quadPtz4kExt = { objectType: 'quadcam', role: 'crossview', yOffset: 0.076 };
-
-workspaceKey.chair = { objectType: 'chair' };
-workspaceKey.chairSwivel = { objectType: 'chair', model: 'swivel' };
-workspaceKey.chairHigh = { objectType: 'chair', model: 'high' };
-workspaceKey.plant = { objectType: 'plant', scale: [1, 1, 1] };
-workspaceKey.tree = { objectType: 'tree', scale: [0.533, 0.533, 0.533] }
-
-workspaceKey.tblRect = { objectType: 'table', model: 'regular' };
-workspaceKey.tblShapeU = { objectType: 'table', model: 'ushape' };
-workspaceKey.tblTrap = { objectType: 'table', model: 'tapered' };
-workspaceKey.tblEllip = { objectType: 'table', model: 'round' };
-workspaceKey.tblSchoolDesk = { objectType: 'table', model: 'schooldesk' };
-workspaceKey.tblPodium = { objectType: 'table', model: 'podium' };
-workspaceKey.carpet = { objectType: 'carpet', color: "#aaa" };
-
-workspaceKey.ceilingMicPro = { objectType: 'microphone', model: 'Ceiling Mic Pro' };
-workspaceKey.ceilingMount = { objectType: "ceilingMount" };
-workspaceKey.tableMicPro = { objectType: 'microphone', model: 'Table Mic Pro' };
-workspaceKey.tableMic = { objectType: 'microphone', model: 'Table Mic' };
-workspaceKey.ceilingMic = { objectType: 'microphone', model: 'Ceiling Mic', yOffset: 0.275 };
-
-workspaceKey.projector = { objectType: 'projector' };
-
-workspaceKey.shareCableUsbc = { objectType: 'sharelid', shareSettings: { hdmi: 0, usbc: 1, multihead: 0 } };
-workspaceKey.shareCableHdmi = { objectType: 'sharelid', shareSettings: { hdmi: 1, usbc: 0, multihead: 0 } };
-workspaceKey.shareCableMulti = { objectType: 'sharelid', shareSettings: { hdmi: 0, usbc: 0, multihead: 1 } };
-workspaceKey.shareCableUsbcHdmi = { objectType: 'sharelid', shareSettings: { hdmi: 1, usbc: 1, multihead: 0 } };
-workspaceKey.shareCableUsbcMulti = { objectType: 'sharelid', shareSettings: { hdmi: 0, usbc: 1, multihead: 1 } };
-workspaceKey.shareCableHdmiMulti = { objectType: 'sharelid', shareSettings: { hdmi: 1, usbc: 0, multihead: 1 } };
-workspaceKey.shareCableUsbcHdmiMulti = { objectType: 'sharelid', shareSettings: { hdmi: 1, usbc: 1, multihead: 1 } };
-
-workspaceKey.mouse = { objectType: 'mouse' };
-
-workspaceKey.displaySngl = { objectType: 'screen', yOffset: 0.045 };
-
-workspaceKey.displayScreen = { objectType: 'screen', model: 'canvas', yOffset: 0.02 };
-
-workspaceKey.display21_9 = { objectType: 'screen', aspect: '21:9', yOffset: 0.045 };
-
-workspaceKey.displayMonitor = { objectType: "monitor" }
-
-
-workspaceKey.wallStd = { objectType: 'wall' };
-workspaceKey.wallWindow = { objectType: 'wall', model: 'window' };
-workspaceKey.ceiling = { objectType: 'ceiling' };
-workspaceKey.columnRect = { objectType: 'wall', color: '#808080' };
-
-
-workspaceKey.box = { objectType: 'box' }
-
-workspaceKey.doorRight = { objectType: 'door', yOffset: -0.47, scale: [1, 1, 1] }
-workspaceKey.doorLeft = { objectType: 'door', yOffset: -0.47, scale: [-1, 1, 1] }
-
-workspaceKey.doorDoubleRight = { objectType: 'door', scale: [1, 1, 1] }
-workspaceKey.doorDoubleLeft = { objectType: 'door', scale: [-1, 1, 1] }
-
-workspaceKey.doorRight2 = { objectType: 'door', yOffset: -0.47, scale: [1, 1, 2] }
-workspaceKey.doorLeft2 = { objectType: 'door', yOffset: -0.47, scale: [-1, 1, 2] }
-
-
-workspaceKey.doorDouble2Right = { objectType: 'door', scale: [1, 1, 2] }
-workspaceKey.doorDouble2Left = { objectType: 'door', scale: [-1, 1, 2] }
-
-workspaceKey.floor = { objectType: 'floor' };
-
-workspaceKey.stageFloor = { objectType: 'box', idRegex: '(^stage$)|(^step-)' };
-
-workspaceKey.personStanding = { objectType: 'person', model: 'woman-standing' };
-
-workspaceKey.personStandingMan = { objectType: 'person', model: 'man-standing-pen' };
-
-workspaceKey.wheelchair = { objectType: 'person', model: 'woman-sitting-wheelchair' };
-
-workspaceKey.wheelchairTurnCycle = { objectType: 'person', model: 'woman-sitting-wheelchair' };
-
-workspaceKey.circulationSpace = { objectType: 'box', opacity: '0.5', color: '#8FDBCE', height: 0.02, length: 1.2, width: 1.2 };
-
-workspaceKey.navigatorTable = { objectType: 'navigator', role: 'navigator', yOffset: 0.0400 };
-
-workspaceKey.navigatorWall = { objectType: 'scheduler', role: 'scheduler', yOffset: 0.0575 };
-
-workspaceKey.laptop = { objectType: 'laptop', role: 'laptop', yOffset: 0.12 };
-
-workspaceKey.pouf = { objectType: 'pouf' };
-
-workspaceKey.couch = { objectType: 'couch', xOffset: -0.05 };
-
-workspaceKey.sphere = { objectType: 'sphere' };
-workspaceKey.cylinder = { objectType: 'cylinder' };
-
-workspaceKey.customVRC = { objectType: 'Customer Video Room Calc', kind: '' };
-
-/* newer PTZ mount cameras will change the base when flipped */
-workspaceKey.ptz4kMount2 = { objectType: 'camera', model: 'ptz', role: 'extended_reach', yOffset: 0.144 };
-
-workspaceKey.ptzVision2 = { objectType: 'camera', model: 'vision', role: 'extended_reach', yOffset: 0.121 };
-
-/* below are the older ptz cameras that don't change the base position when flipped */
-workspaceKey.ptz4kMount = { objectType: 'camera', model: 'ptz', role: 'extended_reach', yOffset: 0.144 };
-
-workspaceKey.ptz4k = { objectType: 'camera', model: 'ptz', role: 'extended_reach', yOffset: 0.183 };
-
-workspaceKey.ptzVision = { objectType: 'camera', model: 'vision', role: 'extended_reach', yOffset: 0.121 };
-
-workspaceKey.webcam4k = { objectType: 'webcam', model: '4k' };
-
-workspaceKey.webcam1080p = { objectType: 'webcam', model: '1080p' };
-
-
-workspaceKey.quadCam = { objectType: 'camera', model: 'quad', role: 'crossview', yOffset: 0.076 };
-workspaceKey.quadCamExt = { objectType: 'camera', model: 'quad', role: 'crossview', yOffset: 0.076 };
-workspaceKey.quadPtz4kExt = { objectType: 'camera', model: 'quad', role: 'crossview', yOffset: 0.076 };
-workspaceKey.wallGlass = { objectType: 'wall', model: 'glass', length: 0.03, opacity: '0.3' };
-workspaceKey.tblCurved = { objectType: 'tableCurved', yOffset: 0.263 };
-
-workspaceKey.headset980 = { objectType: 'headset', model: '980' };
-workspaceKey.headset950 = { objectType: 'headset', model: '950' };
-workspaceKey.headset730 = { objectType: 'headset', model: '730' };
-workspaceKey.headset720 = { objectType: 'headset', model: '720' };
-workspaceKey.headset560 = { objectType: 'headset', model: '560' };
-workspaceKey.headset530 = { objectType: 'headset', model: '530', yOffset: -0.08 };
-workspaceKey.headset320 = { objectType: 'headset', model: '320', yOffset: -0.08 };
-
-workspaceKey.keyboard = { objectType: 'keyboard' };
-
-workspaceKey.pathShape = { objectType: 'shape' };
-
-
-/* low priority */
-workspaceKey.roomKitEqPtz4k = { objectType: 'camera', model: 'ptz', role: 'crossview', yOffset: 0.205 };
-workspaceKey.rmBarProVirtualLens = { objectType: 'videoDevice', model: 'Room Bar Pro', yOffset: 0.045 };
-workspaceKey.roomKitEqQuadPtz4k = { objectType: 'videoDevice', model: 'Room Kit EQ' };
-
-
-/* end of defining workSpaceKey */
 
 let layerSelectionBox = new Konva.Layer({
     name: 'layerSelectionBox'
@@ -1745,54 +1593,6 @@ function pointAtDistanceFromP2TowardP1(x1, y1, x2, y2, D) {
     return { x: x2 + dx * t, y: y2 + dy * t };
 }
 
-/**
- * Angle (slope) of the line from (x1,y1) to (x2,y2), in degrees.
- * 0° points along +X, 90° along +Y. Returns in (-180, 180].
- */
-function lineAngleDegrees(x1, y1, x2, y2) {
-    const dy = y2 - y1;
-    const dx = x2 - x1;
-    return (Math.atan2(dy, dx) * (180 / Math.PI)) - 90;
-}
-
-/**
- * Calculates the rotation of an endpoint from another endpoints.
- */
-
-function findEndPointCoordinates(x1, y1, length, angleDegrees) {
-    // Convert angle from degrees to radians
-
-
-    const angleRadians = (angleDegrees * (Math.PI / 180));
-
-    // Calculate X2 and Y2
-    const x2 = x1 + length * Math.cos(angleRadians);
-    const y2 = y1 + length * Math.sin(angleRadians);
-
-    return { x: x2, y: y2 };
-}
-
-/**
- * Calculates the angle at point B between vectors BA and BC in degrees.
- * @param {object} A - The first point {x, y}.
- * @param {object} B - The middle point (vertex) {x, y}.
- * @param {object} C - The third point {x, y}.
- * @returns {number} The angle in degrees, in the range (-180, 180].
- */
-function getVectorAngleDegrees(A, B, C) {
-
-    const BA_x = A.x - B.x;
-    const BA_y = A.y - B.y;
-    const BC_x = C.x - B.x;
-    const BC_y = C.y - B.y;
-
-    const angleRadians = Math.atan2(BA_y * BC_x - BA_x * BC_y, BA_x * BC_x + BA_y * BC_y);
-
-    // Convert radians to degrees
-    const angleDegrees = angleRadians * 180 / Math.PI;
-
-    return angleDegrees;
-}
 
 
 
@@ -2122,1254 +1922,33 @@ document.getElementById('lblVersion').innerText = version;
 
 
 /*
-    videoDevices key starts with A or B
-    videoDevices requires either: onePersonZoom & twoPersonZoom OR onePersonDistance & twoPersonDistance (OR codecParent or  cameraParent with those fields)
+    Device data loaded from pluggable catalog provider.
+    Currently uses StaticDeviceProvider - can be replaced with REST provider later.
+    See js/data/deviceCatalog.js for the pluggable interface.
+    See js/data/staticDeviceData.js for the static data implementation.
 */
-let videoDevices = [
+let videoDevices = StaticDeviceProvider.getVideoDevices();
+let videoDevicesNoCameras = videoDevices.filter(d => !d.cameraOnly);
+let cameras = StaticDeviceProvider.getCameras();
 
-    { name: "Room Bar", id: 'roomBar', key: 'AB', wideHorizontalFOV: 120, teleHorizontalFOV: 120, onePersonZoom: 2.94, twoPersonDistance: 4.456, topImage: 'roomBar-top.png', frontImage: 'roomBar-front.png', width: 534, depth: 64.4, height: 82, micRadius: 2951, micDeg: 140, speakerRadius: 4500, speakerDeg: 160, cameraShadeOffSet: 20, defaultVert: 930, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }] },
 
-    { name: "Room Bar Pro", id: 'roomBarPro', key: 'AC', wideHorizontalFOV: 110, teleHorizontalFOV: 44, onePersonDistance: 5.45, twoPersonDistance: 8, topImage: 'roomBarPro-top.png', frontImage: 'roomBarPro-front.png', width: 960, depth: 90, height: 120, micRadius: 4000, micDeg: 100, speakerRadius: 5100, speakerDeg: 140, defaultVert: 900, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }] },
+let microphones = StaticDeviceProvider.getMicrophones();
 
-    { name: 'Room Kit EQX: Wall Mount', id: 'roomKitEqx', key: 'AD', codecParent: "roomKitEqQuadCam", cameraParent: "quadCam", topImage: 'roomKitEqx-top.png', frontImage: 'roomKitEqx-front.png', width: 3362, depth: 152, height: 1230, diagonalInches: 75, defaultVert: 681, colors: null, speakerRadius: 7000, speakerDeg: 140, },
+let tables = StaticDeviceProvider.getTables();
 
-    { name: "Room Kit EQ: Quad Camera", key: 'AE', id: 'roomKitEqQuadCam', cameraParent: 'quadCam', topImage: 'quadCam-top.png', frontImage: 'roomKitEqQuadCam-menu.png' },
+let chairs = StaticDeviceProvider.getChairs();
+let displays = StaticDeviceProvider.getDisplays();
+let stageFloors = StaticDeviceProvider.getStageFloors();
+let boxes = StaticDeviceProvider.getBoxes();
+let rooms = StaticDeviceProvider.getRooms();
 
-    { name: "_Kit EQ: Quad Cam Extended (720p)", key: 'AF', id: 'roomKitEqQuadCamExt', cameraParent: 'quadCamExt' },
-
-    { name: "_Room Kit EQ: PTZ 4K Camera", key: 'AG', id: 'roomKitEqPtz4k', cameraParent: 'ptz4k' },
-
-    { name: "_Room Kit EQ: Quad Cam + PTZ 4K Extended", key: 'AH', id: 'roomKitEqQuadPtz4k', cameraParent: 'quadPtz4kExt', topImage: 'roomKitEqQuadPtz4k-top.png', frontImage: 'roomKitEqQuadPtz4k-front.png', defaultVert: 1900 },
-
-    { name: "Room Kit Pro: Quad Camera", id: 'roomKitProQuadCam', key: 'AI', cameraParent: "quadCam", frontImage: 'roomKitEqQuadCam-menu.png' },
-
-    { name: "Board Pro 55*", id: 'boardPro55', key: 'AJ', codecParent: "boardPro75", topImage: 'boardPro55-top.png', frontImage: 'boardPro55-front.png', width: 1278, depth: 92, height: 823, diagonalInches: 55, defaultVert: 974 },
-
-    { name: "Board Pro 75*", id: 'boardPro75', key: 'AK', wideHorizontalFOV: 120, teleHorizontalFOV: 85, onePersonZoom: 2.39, twoPersonZoom: 3.82, topImage: 'boardPro75-top.png', frontImage: 'boardPro75-front.png', width: 1719, depth: 95, height: 1102, diagonalInches: 75, defaultVert: 760 },
-
-    { name: "Board Pro 55 G2: Wall Mount", id: 'brdPro55G2', key: 'AL', codecParent: 'roomBarPro', topImage: 'brdPro55G2-top.png', frontImage: 'brdPro55G2-front.png', width: 1278, depth: 92, height: 823, diagonalInches: 55, micRadius: 4000, micDeg: 100, defaultVert: 970 },
-
-    { name: "Board Pro 75 G2: Wall Mount", id: 'brdPro75G2', key: 'AM', codecParent: 'roomBarPro', topImage: 'brdPro75G2-top.png', frontImage: 'brdPro75G2-front.png', width: 1719, depth: 95, height: 1102, diagonalInches: 75, micRadius: 4000, micDeg: 100, defaultVert: 760 },
-
-    { name: "Desk [RoomOS]", id: 'webexDesk', key: 'AN', wideHorizontalFOV: 64, teleHorizontalFOV: 64, onePersonZoom: 1, twoPersonZoom: 1, topImage: 'webexDesk-top.png', frontImage: 'webexDesk-front.png', width: 565, depth: 160, height: 474, diagonalInches: 24, defaultVert: 710, micRadius: 1049, micDeg: 140 },
-
-    { name: "Desk Pro", id: 'webexDeskPro', key: 'AO', wideHorizontalFOV: 71, teleHorizontalFOV: 71, onePersonDistance: 1.45, twoPersonDistance: 2.45, topImage: 'webexDeskPro-top.png', frontImage: 'webexDeskPro-front.png', width: 627.7, depth: 169.9, height: 497.8, diagonalInches: 27, cameraShadeOffSet: 40, defaultVert: 710, micRadius: 1049, micDeg: 140 },
-
-    { name: "Desk Mini [RoomOS]", id: 'webexDeskMini', key: 'AP', wideHorizontalFOV: 64, teleHorizontalFOV: 64, onePersonZoom: 1, twoPersonZoom: 1, topImage: 'webexDeskMini-top.png', frontImage: 'webexDeskMini-front.png', width: 371, depth: 135, height: 162.5, diagonalInches: 15, cameraShadeOffSet: 30, defaultVert: 710, micRadius: 1049, micDeg: 140 },
-
-    { name: "Room 55*", id: 'room55', key: 'AQ', wideHorizontalFOV: 83, teleHorizontalFOV: 83, onePersonZoom: 2.72, twoPersonZoom: 3.99, topImage: 'room55-top.png', frontImage: 'room55-front.png', width: 1245, depth: 775, height: 1593, diagonalInches: 55, displayOffSetY: 370 },
-
-    { name: "Room Kit Mini*", id: 'rmKitMini', key: 'AR', wideHorizontalFOV: 112, teleHorizontalFOV: 112, onePersonZoom: 2.04, twoPersonZoom: 3.41, topImage: 'rmKitMini-top.png', frontImage: 'rmKitMini-front.png', width: 500, depth: 77, height: 80, defaultVert: 710 },
-
-    { name: "Room Kit*", id: 'roomKit', key: 'AS', wideHorizontalFOV: 83, teleHorizontalFOV: 83, onePersonZoom: 2.72, twoPersonZoom: 3.99, topImage: 'roomKit-top.png', frontImage: 'roomKit-front.png', width: 700, depth: 88, height: 106, defaultVert: 1200 },
-
-    { name: "Virtual Lens Bar Pro", id: 'rmBarProVirtualLens', key: 'AT', codecParent: 'roomBarPro', wideHorizontalFOV: 112, teleHorizontalFOV: 70, onePersonZoom: 4.335, twoPersonZoom: 3.5, defaultVert: 1200 },
-
-    { name: 'Room Kit EQX: Floor Stand', id: 'roomKitEqxFS', key: 'AU', codecParent: "roomKitEqQuadCam", cameraParent: "quadCam", topImage: 'roomKitEqxFS-top.png', frontImage: 'roomKitEqxFS-front.png', width: 3362, depth: 924, height: 1910, diagonalInches: 75, displayOffSetY: 450, defaultVert: 0, colors: null, speakerRadius: 7000, speakerDeg: 140 },
-
-    { name: "Board Pro 55 G2: Floor Stand", id: 'brdPro55G2FS', key: 'AV', codecParent: 'roomBarPro', topImage: 'brdPro55G2FS-top.png', frontImage: 'brdPro55G2FS-front.png', width: 1278, depth: 944, height: 1778, diagonalInches: 55, micRadius: 4000, micDeg: 100, displayOffSetY: 420, defaultVert: 0 },
-
-    { name: "Board Pro 75 G2: Floor Stand", id: 'brdPro75G2FS', key: 'AW', codecParent: 'roomBarPro', topImage: 'brdPro75G2FS-top.png', frontImage: 'brdPro75G2FS-front.png', width: 1719, depth: 926, height: 1866, diagonalInches: 75, micRadius: 4000, micDeg: 100, displayOffSetY: 420, defaultVert: 0 },
-
-    { name: 'Room Kit EQX: Wall Stand', id: 'roomKitEqxWS', key: 'AX', codecParent: "roomKitEqQuadCam", cameraParent: "quadCam", topImage: 'roomKitEqx-top.png', frontImage: 'roomKitEqx-front.png', width: 3362, depth: 152, height: 1892, diagonalInches: 75, defaultVert: 0, colors: null, speakerRadius: 7000, speakerDeg: 140 },
-
-    { name: "Board Pro 75 G2: Wheel Stand", id: 'brdPro75G2Wheel', key: 'AY', codecParent: 'roomBarPro', topImage: 'brdPro75G2Wheel-top.png', frontImage: 'brdPro75G2FS-front.png', width: 1719, depth: 950, height: 1905, diagonalInches: 75, micRadius: 4000, micDeg: 100, displayOffSetY: 420, defaultVert: 0 },
-
-    { name: "Board Pro 55 G2: Wheel Stand", id: 'brdPro55G2Wheel', key: 'AZ', codecParent: 'roomBarPro', topImage: 'brdPro55G2FS-top.png', frontImage: 'brdPro55G2FS-front.png', width: 1278, depth: 944, height: 1778, diagonalInches: 55, micRadius: 4000, micDeg: 100, displayOffSetY: 420, defaultVert: 0 },
-
-    { name: "Board Pro 55 G2: Wall Stand", id: 'brdPro55G2WS', key: 'BA', codecParent: 'roomBarPro', topImage: 'brdPro55G2-top.png', frontImage: 'brdPro55G2-front.png', width: 1278, depth: 92, height: 823, diagonalInches: 55, micRadius: 4000, micDeg: 100, defaultVert: 0 },
-
-    { name: "Board Pro 75 G2: Wall Stand", id: 'brdPro75G2WS', key: 'BB', codecParent: 'roomBarPro', topImage: 'brdPro75G2-top.png', frontImage: 'brdPro75G2-front.png', width: 1719, depth: 95, height: 1102, diagonalInches: 75, micRadius: 4000, micDeg: 100, defaultVert: 0 },
-
-    { name: "Room Bar BYOD", id: 'roomBarByod', key: 'BC', wideHorizontalFOV: 120, teleHorizontalFOV: 120, onePersonZoom: 2.94, twoPersonDistance: 4.456, topImage: 'roomBar-top.png', frontImage: 'roomBar-front.png', width: 534, depth: 64.4, height: 82, micRadius: 2951, micDeg: 140, speakerRadius: 4500, speakerDeg: 160, cameraShadeOffSet: 20, defaultVert: 930, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }] },
-]
-
-
-let videoDevicesNoCameras = structuredClone(videoDevices);
-
-let ptzCameraRoles = [{ crossview: 'Cross-View' }, { extended_reach: 'Extended Speaker View' }, { presentertrack: 'PresenterTrack' }, { presentertrack2: 'Manual Camera' }]
-
-let roomVisionRoles = [...ptzCameraRoles, { crossviewPresenterTrack: 'Cross-View & PresenterTrack' }]
-
-/*
-    camera key starts with C
-
-    cameras requires either onePersonZoom & twoPersonZoom or onePersonDistance & twoPersonDistance
-*/
-
-let ptzCameraMounts = [{ stdMount: 'Standard' }, { flipped: 'Flipped' }, { flippedPole: 'Flipped & Ceiling Pole' }];
-
-let cameras = [
-    { name: "Precision 60 Camera*", id: 'cameraP60', key: 'CA', wideHorizontalFOV: 83, teleHorizontalFOV: 83, onePersonZoom: 20, twoPersonZoom: 20, topImage: 'cameraP60-top.png', frontImage: 'cameraP60-front.png', width: 268.1, depth: 162.5, height: 151.9, cameraShadeOffSet: 40, displayOffSetY: 35, defaultVert: 1900 },
-
-    { name: "_PTZ 4K Camera*", id: 'ptz4k', key: 'CB', wideHorizontalFOV: 70, teleHorizontalFOV: 70, onePersonZoom: 2.4, twoPersonZoom: 3, topImage: 'ptz4k-top.png', frontImage: 'ptz4k-front.png', width: 158.4, depth: 200.2, height: 177.5, cameraShadeOffSet: 50, displayOffSetY: 60, defaultVert: 1900, mounts: ptzCameraMounts, roles: ptzCameraRoles },
-
-    { name: "Quad Camera", id: 'quadCam', key: 'CC', wideHorizontalFOV: 83, teleHorizontalFOV: 50, onePersonDistance: 5.96, twoPersonDistance: 10.96, teleFullWidth: true, topImage: 'quadCam-top.png', frontImage: 'quadCam-front.png', width: 950, depth: 102.5, height: 120, defaultVert: 890, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }], speakerRadius: 4000, speakerDeg: 140, },
-
-    { name: "_Quad Cam Extended (720p)", id: 'quadCamExt', key: 'CD', wideHorizontalFOV: 83, teleHorizontalFOV: 50, onePersonZoom: 4, twoPersonZoom: 4, teleFullWidth: true, topImage: 'quadCamExt-top.png', frontImage: 'quadCamExt-front.png', width: 950, depth: 102.5, height: 120, defaultVert: 890, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }] },
-
-    { name: "_Quad Cam + PTZ 4K Extended*", id: 'quadPtz4kExt', key: 'CE', wideHorizontalFOV: 83, teleHorizontalFOV: 50, onePersonZoom: 2.64, twoPersonZoom: 5, teleFullWidth: true, topImage: 'quadPtz4kExt-top.png', frontImage: 'quadPtz4kExt-front.png', width: 950, depth: 200.2, height: 177.5, displayOffSetY: 60, defaultVert: 1900 },
-
-    { name: "_Room Vision PTZ", id: 'ptzVision', key: 'CF', wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 5, twoPersonDistance: 10, topImage: 'ptzVision-top.png', frontImage: 'ptzVision-menu.png', width: 165, depth: 248, height: 193, cameraShadeOffSet: 34, defaultVert: 1900, mounts: ptzCameraMounts, roles: ptzCameraRoles, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }] },
-
-    { name: "_PTZ 4K & Bracket", id: 'ptz4kMount', key: 'CG', wideHorizontalFOV: 70, teleHorizontalFOV: 70, onePersonZoom: 2.4, twoPersonZoom: 3, topImage: 'ptz4kMount-top.png', frontImage: 'ptz4kMount-menu.png', width: 158.4, depth: 290, height: 177.5, cameraShadeOffSet: 50, displayOffSetY: 60, defaultVert: 1900, mounts: ptzCameraMounts, roles: ptzCameraRoles },
-
-    { name: "Room Vision PTZ Cam & Bracket", id: 'ptzVision2', key: 'CH', wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 5, twoPersonDistance: 10, topImage: 'ptzVision-top.png', frontImage: 'ptzVision-menu.png', width: 165, depth: 248, height: 193, cameraShadeOffSet: 34, defaultVert: 1900, mounts: ptzCameraMounts, roles: roomVisionRoles, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }] },
-
-    { name: "PTZ 4K Cam & Bracket", id: 'ptz4kMount2', key: 'CI', wideHorizontalFOV: 70, teleHorizontalFOV: 70, onePersonZoom: 2.4, twoPersonZoom: 3, topImage: 'ptz4kMount-top.png', frontImage: 'ptz4kMount-menu.png', width: 158.4, depth: 290, height: 177.5, cameraShadeOffSet: 50, displayOffSetY: 60, defaultVert: 1900, mounts: ptzCameraMounts, roles: ptzCameraRoles },
-
-]
-
-/* used for ptz4kNarrowFov crossview and extended_reach */
-let ptz4kExtendedReach = { wideHorizontalFOV: 33, teleHorizontalFOV: 33, onePersonDistance: 8, twoPersonDistance: 18 };
-
-let ptz4kPresenterTrack = { wideHorizontalFOV: 33, teleHorizontalFOV: 33, onePersonDistance: 8, twoPersonDistance: 16 };
-/* ptz4k */
-cameras[1].extended_reach = ptz4kExtendedReach;
-cameras[1].presentertrack = ptz4kPresenterTrack;
-cameras[1].presentertrack2 = ptz4kPresenterTrack;
-cameras[1].rolesDialog = 'How do you want to use the camera?';
-
-/* ptz4kmount - backwards compatible object  */
-cameras[6].extended_reach = ptz4kExtendedReach;
-cameras[6].presentertrack = ptz4kPresenterTrack;
-cameras[6].presentertrack2 = ptz4kPresenterTrack;
-cameras[6].rolesDialog = 'How do you want to use the camera?';
-
-/* ptz4kMount2 */
-cameras[8].extended_reach = ptz4kExtendedReach;
-cameras[8].presentertrack = ptz4kPresenterTrack;
-cameras[8].presentertrack2 = ptz4kPresenterTrack;
-cameras[8].rolesDialog = 'How do you want to use the camera?';
-
-/* ptzVision - backwards compatible object */
-cameras[5].extended_reach = { wideHorizontalFOV: 33, teleHorizontalFOV: 33, onePersonDistance: 13, twoPersonDistance: 26 };
-cameras[5].presentertrack = { wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 10, twoPersonDistance: 22 };
-cameras[5].presentertrack2 = { wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 10, twoPersonDistance: 22 };
-cameras[5].rolesDialog = 'How do you want to use the camera?';
-
-/* ptzVision2 */
-cameras[7].extended_reach = { wideHorizontalFOV: 33, teleHorizontalFOV: 33, onePersonDistance: 13, twoPersonDistance: 26 };
-cameras[7].presentertrack = { wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 10, twoPersonDistance: 22 };
-cameras[7].presentertrack2 = { wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 10, twoPersonDistance: 22 };
-cameras[7].rolesDialog = 'How do you want to use the camera?';
-
-/* Room Bar Pro */
-videoDevices[1].multiLensReach = [
-    { rotation: videoDevices[1].teleHorizontalFOV / 2 + 90, teleAngle: 13, onePersonDistance: 2.5, twoPersonDistance: 6.85 },
-    { rotation: (180 - videoDevices[1].wideHorizontalFOV) / 2 + ((videoDevices[1].wideHorizontalFOV - videoDevices[1].teleHorizontalFOV) / 2) - 13, teleAngle: 13, onePersonDistance: 2.5, twoPersonDistance: 6.85 },
-    { rotation: videoDevices[1].teleHorizontalFOV / 2 + 90 + 13, teleAngle: 20, onePersonDistance: 1.4, twoPersonDistance: 4 },
-    { rotation: (180 - videoDevices[1].wideHorizontalFOV) / 2, teleAngle: 20, onePersonDistance: 1.4, twoPersonDistance: 4 },
-]
-
-
-/* Microphone & Navigators - key starts with M */
-let microphones = [
-    {
-        name: "Table Microphone",
-        id: "tableMic",
-        key: "MB",
-        micRadius: 1000,
-        micDeg: 360,
-        topImage: 'tableMic-top.png',
-        frontImage: 'tableMic-front.png',
-        width: 63.9,
-        depth: 63.9,
-        height: 10.9,
-        defaultVert: 710,
-
-    },
-    {
-        name: "Table Microphone Pro",
-        id: "tableMicPro",
-        key: "MC",
-        micRadius: 1500,
-        micDeg: 360,
-        topImage: 'tableMicPro-top.png',
-        frontImage: 'tableMicPro-front.png',
-        width: 98,
-        depth: 98,
-        height: 29,
-        defaultVert: 710,
-        colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }],
-    },
-    {
-        name: "Ceiling Microphone",
-        id: "ceilingMic",
-        key: "MD",
-        micRadius: 4200,
-        micDeg: 180,
-        topImage: 'ceilingMic-top.png',
-        frontImage: 'ceilingMic-front.png',
-        width: 750,
-        depth: 550,
-        height: 270,
-        defaultVert: 2500,
-    },
-    {
-        name: "Ceiling Microphone Pro",
-        id: "ceilingMicPro",
-        key: "MA",
-        micRadius: 3500,
-        micDeg: 360,
-        topImage: 'ceilingMicPro-top.png',
-        frontImage: 'ceilingMicPro-front.png',
-        width: 420,
-        depth: 420,
-        height: 48,
-        defaultVert: 2500,
-        colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }],
-        mounts: [{ ceilingMount: 'Wired Hanging Mount' }, { ceilingBracket: 'Ceiling Bracket Mount' }, { dropCeilingGrid: 'Drop Ceiling Grid Mount' }]
-    },
-    {
-        name: "Table Navigator",
-        id: "navigatorTable",
-        key: "ME",
-        topImage: 'navigatorTable-top.png',
-        frontImage: 'navigatorTable-menu.png',
-        width: 242,
-        depth: 163,
-        height: 96,
-        defaultVert: 710,
-        roles: [{ navigator: 'Navigator' }, { scheduler: 'Scheduler' }],
-        colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }],
-    },
-    {
-        name: "Wall Navigator",
-        id: "navigatorWall",
-        key: "MF",
-        topImage: 'navigatorWall-top.png',
-        frontImage: 'navigatorWall-menu.png',
-        width: 242,
-        depth: 115,
-        height: 164,
-        defaultVert: 1100,
-        roles: [{ scheduler: 'Scheduler' }, { navigator: 'Navigator' }],
-        colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }],
-
-    },
-    {
-        name: "Laptop",
-        id: "laptop",
-        key: "MG",
-        topImage: 'laptop-top.png',
-        frontImage: 'laptop-menu.png',
-        width: 340,
-        depth: 260,
-        height: 164,
-        defaultVert: 720,
-        roles: [{ firstMonitor: 'First Monitor' }, { secondMonitor: 'Second Monitor' }],
-
-    },
-    {
-        name: "_Phone (unknown)",
-        id: "phoneUnknown",
-        key: "MH",
-        topImage: 'phone9861-top.png',
-        frontImage: 'phone9861-top.png',
-        width: 210,
-        depth: 190,
-        height: 160,
-        defaultVert: 720,
-    },
-    {
-        name: "Phone 9841",
-        id: "phone9841",
-        key: "MI",
-        topImage: 'phone9861-top.png',
-        frontImage: 'phone9861-top.png',
-        width: 210,
-        depth: 190,
-        height: 160,
-        defaultVert: 720,
-        colors: [{ dark: 'Carbon Black' }, { light: 'First Light' }],
-    },
-    {
-        name: "Phone 9851",
-        id: "phone9851",
-        key: "MJ",
-        topImage: 'phone9861-top.png',
-        frontImage: 'phone9861-top.png',
-        width: 210,
-        depth: 190,
-        height: 160,
-        defaultVert: 720,
-        colors: [{ dark: 'Carbon Black' }, { light: 'First Light' }],
-    },
-    {
-        name: "Phone 9861",
-        id: "phone9861",
-        key: "MK",
-        topImage: 'phone9861-top.png',
-        frontImage: 'phone9861-top.png',
-        width: 210,
-        depth: 190,
-        height: 160,
-        defaultVert: 720,
-        colors: [{ dark: 'Carbon Black' }, { light: 'First Light' }],
-    },
-    {
-        name: "Phone 9871",
-        id: "phone9871",
-        key: "ML",
-        topImage: 'phone9861-top.png',
-        frontImage: 'phone9871-menu.png',
-        width: 210,
-        depth: 190,
-        height: 160,
-        defaultVert: 720,
-        colors: [{ dark: 'Carbon Black' }, { light: 'First Light' }],
-    },
-    {
-        name: "_Cable Lid",
-        id: "shareCableLid",
-        key: "MM",
-        topImage: 'shareCableUsbc-top.png',
-        frontImage: 'shareCableUsbc-top.png',
-        width: 500,
-        depth: 685,
-        height: 10,
-        defaultVert: 720,
-    },
-    {
-        name: "Desk Camera 4K (webcam)",
-        id: "webcam4k",
-        key: "MN",
-        topImage: 'webcam-top.png',
-        frontImage: 'webcam4k-menu.png',
-        width: 92,
-        depth: 67,
-        height: 73,
-        defaultVert: 1180,
-    },
-    {
-        name: "B&O Cisco 980",
-        id: "headset980",
-        key: "MO",
-        topImage: 'headset-top.png',
-        frontImage: 'headset980-menu.png',
-        width: 175,
-        depth: 175,
-        height: 73,
-        defaultVert: 720,
-    },
-    {
-        name: "B&O Cisco 950",
-        id: "headset950",
-        key: "MP",
-        topImage: 'headset-top.png',
-        frontImage: 'headset-top.png',
-        width: 175,
-        depth: 175,
-        height: 73,
-        defaultVert: 720,
-    },
-    {
-        name: "Headset 730",
-        id: "headset730",
-        key: "MQ",
-        topImage: 'headset-top.png',
-        frontImage: 'headset-top.png',
-        width: 175,
-        depth: 175,
-        height: 73,
-        defaultVert: 720,
-    },
-    {
-        name: "Headset 720",
-        id: "headset720",
-        key: "MR",
-        topImage: 'headset-top.png',
-        frontImage: 'headset-top.png',
-        width: 175,
-        depth: 175,
-        height: 73,
-        defaultVert: 720,
-    },
-    {
-        name: "Headset 560",
-        id: "headset560",
-        key: "MS",
-        topImage: 'headset-top.png',
-        frontImage: 'headset-top.png',
-        width: 175,
-        depth: 175,
-        height: 73,
-        defaultVert: 720,
-    },
-    {
-        name: "Headset 530",
-        id: "headset530",
-        key: "MT",
-        topImage: 'headset-top.png',
-        frontImage: 'headset-top.png',
-        width: 175,
-        depth: 175,
-        height: 73,
-        defaultVert: 720,
-    },
-    {
-        name: "Headset 320",
-        id: "headset320",
-        key: "MU",
-        topImage: 'headset-top.png',
-        frontImage: 'headset-top.png',
-        width: 175,
-        depth: 175,
-        height: 73,
-        defaultVert: 720,
-    },
-    {
-        name: "Keyboard",
-        id: "keyboard",
-        key: "MV",
-        topImage: 'keyboard-top.png',
-        frontImage: 'keyboard-menu.png',
-        width: 360,
-        depth: 130,
-        height: 13,
-        defaultVert: 720,
-    },
-    {
-        name: "Ceiling Projector",
-        id: "projector",
-        key: "MW",
-        topImage: 'projector-top.png',
-        frontImage: 'projector-menu.png',
-        width: 580,
-        depth: 680,
-        height: 200,
-        defaultVert: 2500,
-    },
-    {
-        name: "Ceiling Speaker Round**",
-        id: "speaker",
-        key: "MX",
-        topImage: 'tblPodium-menu.png',
-        frontImage: 'tblPodium-menu.png',
-        width: 500,
-        depth: 500,
-        height: 10,
-        defaultVert: 2500,
-        speakerRadius: 1500,
-        speakerDeg: 360,
-    },
-    {
-        name: "Desk Camera 1080p (webcam)",
-        id: "webcam1080p",
-        key: "MY",
-        topImage: 'webcam-top.png',
-        frontImage: 'webcam4k-menu.png',
-        width: 92,
-        depth: 67,
-        height: 73,
-        defaultVert: 1180,
-    },
-]
-
-/* Tables & Walls & resizableItems. Table keys starts with T, Wall keys start with W */
-let tables = [{
-    name: 'Table Rect (round corners)',
-    id: 'tblRect',
-    key: 'TA',
-    frontImage: 'tblRect-front.png',
-    family: 'resizeItem',
-    resizeable: ['width', 'depth', 'vheight']
-},
-{
-    name: 'Table Ellipse',
-    id: 'tblEllip',
-    key: 'TB',
-    frontImage: 'tblEllip-front.png',
-    family: 'resizeItem',
-    resizeable: ['width', 'depth', 'vheight']
-},
-{
-    name: 'Table Tapered (trapezoid)',
-    id: 'tblTrap',
-    key: 'TC',
-    frontImage: 'tblTrap-front.png',
-    family: 'resizeItem',
-    resizeable: ['width', 'depth', 'vheight']
-},
-{
-    name: 'Table U-Shaped',
-    id: 'tblShapeU',
-    key: 'TD',
-    frontImage: 'tblShapeU-menu.png',
-    family: 'tableBox',
-    resizeable: ['width', 'depth', 'vheight']
-},
-{
-    name: 'Desk',
-    id: 'tblSchoolDesk',
-    key: 'TE',
-    depth: 590,
-    frontImage: 'tblSchoolDesk-menu.png',
-    family: 'resizeItem',
-    resizeable: ['width', 'vheight']
-},
-{
-    name: 'Podium, round',
-    id: 'tblPodium',
-    key: 'TF',
-    frontImage: 'tblPodium-menu.png',
-    family: 'resizeItem',
-    resizeable: ['width', 'vheight']
-},
-{
-    name: 'Wall Standard (10 cm / 3.9")',
-    id: 'wallStd',
-    key: 'WA',
-    frontImage: 'wallStd-front.png',
-    family: 'wallBox',
-    resizeable: ['depth', 'vheight']
-},
-{
-    name: 'Glass Wall',
-    id: 'wallGlass',
-    key: 'WB',
-    frontImage: 'wallGlass-front.png',
-    family: 'wallBox',
-    resizeable: ['depth', 'vheight']
-},
-
-{
-    name: 'Column',
-    id: 'columnRect',
-    key: 'WC',
-    frontImage: 'columnRect-front.png',
-    family: 'wallBox',
-    resizeable: ['width', 'depth', 'vheight']
-},
-
-{
-    name: 'Wall with Windows',
-    id: 'wallWindow',
-    key: 'WE',
-    frontImage: 'wallWindow-front.png',
-    topImage: 'wallWindow-top.png',
-    family: 'wallBox',
-    resizeable: ['depth', 'vheight']
-},
-{
-    name: 'Row of Chairs',
-    id: 'wallChairs',
-    key: 'WF',
-    topImage: 'chair-top.png',
-    frontImage: 'wallChairs-menu.png',
-    family: 'resizeItem',
-    resizeable: ['depth']
-},
-{
-    name: 'Table Curved',
-    id: 'tblCurved',
-    key: 'WG',
-    frontImage: 'tblCurved-menu.png',
-    family: 'resizeItem',
-    resizeable: []
-},
-{
-    name: 'Couch',
-    id: 'couch',
-    key: 'WH',
-    frontImage: 'couch-menu.png',
-    family: 'resizeItem',
-    resizeable: ['depth']
-},
-{
-    name: 'Unknown Resizeable Workspace* Designer Object*',
-    id: 'tblUnknownObj',
-    key: 'WI',
-    frontImage: 'tblUnknownObj-menu.png',
-    family: 'resizeItem',
-    stroke: 'purple',
-    strokeWidth: 3,
-    dash: [4, 4],
-    resizeable: ['width', 'depth', 'vheight']
-},
-{
-    name: 'Sphere',
-    id: 'sphere',
-    key: 'WJ',
-    frontImage: 'sphere-menu.png',
-    family: 'resizeItem',
-    stroke: 'black',
-    strokeWidth: 0.5,
-    resizeable: []
-
-},
-{
-    name: 'Column / Cylinder',
-    id: 'cylinder',
-    key: 'WK',
-    frontImage: 'cylinder-menu.png',
-    family: 'resizeItem',
-    stroke: 'black',
-    strokeWidth: 1,
-    opacity: 0.4,
-    resizeable: []
-},
-{
-    name: 'Custom Path Shape',
-    id: 'pathShape',
-    key: 'WL',
-    frontImage: 'pathShape-menu.png',
-    strokeWidth: 1 / scale,
-    resizeable: []
-}
-]
-
-/* Chair, doors and people. Key ID start with S or U */
-let chairs = [
-    {
-        name: "Chair",
-        id: "chair",
-        key: "SA",
-        topImage: 'chair-top.png',
-        frontImage: 'chair-front.png',
-        width: 640,
-        depth: 640,
-        opacity: 0.7,
-    },
-    {
-        name: "Person Standing (woman)",
-        id: "personStanding",
-        key: "SC",
-        topImage: 'person-top.png',
-        frontImage: 'person-front.png',
-        width: 640,
-        depth: 640,
-        opacity: 1,
-    },
-    {
-        name: "Door Right (thin frame)**",
-        id: "doorRight",
-        key: "SB",
-        topImage: 'doorRight-top.png',
-        frontImage: 'doorRight-menu.png',
-        width: 1117,
-        depth: 1016,
-        opacity: 1,
-    },
-    {
-        name: "Door Left (thin frame)**",
-        id: "doorLeft",
-        key: "SD",
-        topImage: 'doorLeft-top.png',
-        frontImage: 'doorLeft-menu.png',
-        width: 1117,
-        depth: 1016,
-        opacity: 1,
-    },
-    {
-        name: "Double Door (thin frame)**",
-        id: "doorDouble",
-        key: "SE",
-        topImage: 'doorDouble-top.png',
-        frontImage: 'doorDouble-menu.png',
-        width: 2134,
-        depth: 1004,
-        opacity: 1,
-    },
-    {
-        name: "Plant",
-        id: "plant",
-        key: "SF",
-        topImage: 'plant.png',
-        frontImage: 'plant.png',
-        width: 640,
-        depth: 640,
-        opacity: 1,
-    },
-    {
-        name: "Wheelchair",
-        id: "wheelchair",
-        key: "SG",
-        topImage: 'wheelchair-top.png',
-        frontImage: 'wheelchair-menu.png',
-        width: 665,
-        depth: 1050,
-        opacity: 0.6,
-    },
-    {
-        name: 'Wheelchair turn cycle (150cm/60")',
-        id: 'wheelchairTurnCycle',
-        key: "SH",
-        topImage: 'wheelchairTurnCycle-top.png',
-        frontImage: 'wheelchairTurnCycle-menu.png',
-        width: 1500,
-        depth: 1500,
-        opacity: 0.65,
-    },
-    {
-        name: "Circulation space (120cm/4')",
-        id: 'circulationSpace',
-        key: "SI",
-        topImage: 'circulationSpace-top.png',
-        frontImage: 'circulationSpace-menu.png',
-        width: 1200,
-        depth: 1200,
-        opacity: 0.8,
-    },
-    {
-        name: "Pouf (round stool)",
-        id: 'pouf',
-        key: 'SJ',
-        width: 440,
-        depth: 440,
-        frontImage: 'tblPodium-menu.png',
-        topImage: 'pouf-top.png'
-    },
-    {
-        name: "Door Right",
-        id: "doorRight2",
-        key: "SK",
-        topImage: 'doorRight-top.png',
-        frontImage: 'doorRight-menu.png',
-        width: 1117,
-        depth: 1016,
-        opacity: 1,
-    },
-    {
-        name: "Door Left",
-        id: "doorLeft2",
-        key: "SL",
-        topImage: 'doorLeft-top.png',
-        frontImage: 'doorLeft-menu.png',
-        width: 1117,
-        depth: 1016,
-        opacity: 1,
-    },
-    {
-        name: "Double Door",
-        id: "doorDouble2",
-        key: "SM",
-        topImage: 'doorDouble-top.png',
-        frontImage: 'doorDouble-menu.png',
-        width: 2134, /* 2008 */
-        depth: 1004,
-        opacity: 1,
-    },
-    {
-        name: "Door Right (part of double)**",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "doorDoubleRight",
-        key: "SN",
-        topImage: 'doorRight-top.png',
-        frontImage: 'doorRight-menu.png',
-        width: 1059,
-        depth: 1016,
-        opacity: 1,
-    },
-    {
-        name: "Door Left (part of double)**",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "doorDoubleLeft",
-        key: "SO",
-        topImage: 'doorLeft-top.png',
-        frontImage: 'doorLeft-menu.png',
-        width: 1059,
-        depth: 1016,
-        opacity: 1,
-    },
-    {
-        name: "Unknown Workspace Designer* Object*",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "unknownObj",
-        key: "SP",
-        topImage: 'unknownObj-top.png',
-        frontImage: 'unknownObj-menu.png',
-        width: 350,
-        depth: 350,
-        opacity: 0.6,
-    },
-    {
-        name: "_Switch (cable map)",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "switch",
-        key: "SQ",
-        topImage: 'switch-top.png',
-        frontImage: 'switch-top.png',
-        width: 720,
-        depth: 300,
-        opacity: 0.8,
-        roles: [{ ceiling: 'ceiling' }, { table: 'table' }]
-    },
-    {
-        name: "_Codec (cable map)",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "codec",
-        key: "SR",
-        topImage: 'codec-top.png',
-        frontImage: 'codec-top.png',
-        width: 720,
-        depth: 300,
-        opacity: 0.8,
-    },
-    {
-        name: "Person Standing (man)",
-        id: "personStandingMan",
-        key: "SS",
-        topImage: 'person-top.png',
-        frontImage: 'person-front.png',
-        width: 640,
-        depth: 640,
-        opacity: 1,
-    },
-    {
-        name: 'PC Monitor 27"',
-        id: 'displayMonitor',
-        key: 'ST',
-        frontImage: 'displayMonitor-menu.png',
-        topImage: 'displayMonitor-top.png',
-        width: 615,
-        depth: 35,
-        height: 450,
-        defaultVert: 710,
-        roles: [{ firstMonitor: 'First Monitor' }, { secondMonitor: 'Second Monitor' }],
-    },
-
-    {
-        name: "USB-C Cable",
-        id: "shareCableUsbc",
-        key: "SU",
-        topImage: 'shareCableUsbc-top.png',
-        frontImage: 'shareCableUsbc-menu.png',
-        width: 499,
-        depth: 499,
-        height: 10,
-        defaultVert: 710,
-
-    },
-    {
-        name: "HDMI Cable",
-        id: "shareCableHdmi",
-        key: "SV",
-        topImage: 'shareCableHdmi-top.png',
-        frontImage: 'shareCableHdmi-menu.png',
-        width: 499,
-        depth: 499,
-        height: 10,
-        defaultVert: 710,
-
-    },
-    {
-        name: "Multi-Head Cable",
-        id: "shareCableMulti",
-        key: "SW",
-        topImage: 'shareCableMulti-top.png',
-        frontImage: 'shareCableMulti-menu.png',
-        width: 499,
-        depth: 499,
-        height: 10,
-        defaultVert: 710,
-
-    },
-    {
-        name: "Swivel Chair",
-        id: "chairSwivel",
-        key: "SX",
-        topImage: 'chairSwivel-top.png',
-        frontImage: 'chairSwivel-top.png',
-        width: 640,
-        depth: 640,
-        opacity: 0.7,
-    },
-    {
-        name: "USB-C & HDMI",
-        id: "shareCableUsbcHdmi",
-        key: "SY",
-        topImage: 'shareCableUsbcHdmi-top.png',
-        frontImage: 'shareCableUsbcHdmi-top.png',
-        width: 499,
-        depth: 499,
-        height: 10,
-        defaultVert: 710,
-
-    },
-    {
-        name: "USB-C & Multi-Head",
-        id: "shareCableUsbcMulti",
-        key: "SZ",
-        topImage: 'shareCableUsbcMulti-top.png',
-        frontImage: 'shareCableUsbcMulti-top.png',
-        width: 499,
-        depth: 499,
-        height: 10,
-        defaultVert: 710,
-    },
-    {
-        name: "HDMI & Multi-Head",
-        id: "shareCableHdmiMulti",
-        key: "UA",
-        topImage: 'shareCableHdmiMulti-top.png',
-        frontImage: 'shareCableHdmiMulti-top.png',
-        width: 499,
-        depth: 499,
-        height: 10,
-        defaultVert: 710,
-
-    },
-    {
-        name: "HDMI & USB-C & Multi-Head",
-        id: "shareCableUsbcHdmiMulti",
-        key: "UB",
-        topImage: 'shareCableUsbcHdmiMulti-top.png',
-        frontImage: 'shareCableUsbcHdmiMulti-top.png',
-        width: 499,
-        depth: 683,
-        height: 10,
-        defaultVert: 710,
-
-    },
-    {
-        name: "Mouse",
-        id: "mouse",
-        key: "UC",
-        topImage: 'mouse-top.png',
-        frontImage: 'mouse-menu.png',
-        width: 45,
-        depth: 85,
-        height: 33,
-        defaultVert: 730,
-    },
-    {
-        name: "Stool Chair",
-        id: "chairHigh",
-        key: "UD",
-        topImage: 'chairHigh-top.png',
-        frontImage: 'chairHigh-top.png',
-        width: 640,
-        depth: 640,
-        opacity: 0.7,
-    },
-    {
-        name: "Codec-Room Kit Pro**",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "codecPro",
-        key: "UE",
-        topImage: 'codec-top.png',
-        frontImage: 'codec-top.png',
-        width: 720,
-        depth: 300,
-        opacity: 0.8,
-    },
-    {
-        name: "Codec-Room Kit EQ**",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "codecEQ",
-        key: "UF",
-        topImage: 'codec-top.png',
-        frontImage: 'codec-top.png',
-        width: 720,
-        depth: 300,
-        opacity: 0.8,
-    },
-    {
-        name: "Codec-Room Kit EQX**",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "codecEQX",
-        key: "UG",
-        topImage: 'codec-top.png',
-        frontImage: 'codec-top.png',
-        width: 720,
-        depth: 300,
-        opacity: 0.8,
-    },
-    {
-        name: "Switch Catalyst 9200CX series**",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "switchC9200CX",
-        key: "UH",
-        topImage: 'switch-top.png',
-        frontImage: 'switch-top.png',
-        width: 720,
-        depth: 300,
-        opacity: 0.8,
-        roles: [{ ceiling: 'ceiling' }, { table: 'table' }]
-    },
-    {
-        name: "Switch Catalyst 1200 series**",  /* only created on export from VRC to Workspace Designer, then on re-import */
-        id: "switchC1200",
-        key: "UI",
-        topImage: 'switch-top.png',
-        frontImage: 'switch-top.png',
-        width: 720,
-        depth: 300,
-        opacity: 0.8,
-        roles: [{ ceiling: 'ceiling' }, { table: 'table' }]
-    },
-    {
-        name: "Christmas Tree**",
-        id: "tree",
-        key: "UJ",
-        topImage: 'tree.png',
-        frontImage: 'tree.png',
-        width: 800,
-        depth: 800,
-        opacity: 1,
-    },
-
-]
-
-/* displays key starts with D */
-let displays = [
-    {
-        name: 'Single Display',
-        id: 'displaySngl',
-        key: 'DA',
-        frontImage: 'displaySngl-front.png',
-        topImage: 'displaySngl-top.png',
-        width: displayWidth * 1,
-        depth: displayDepth,
-        height: displayHeight,
-        diagonalInches: diagonalInches,
-        defaultVert: 1010,
-        roles: [{ 'singleScreen': 'Single Screen' }, { 'firstScreen': 'First Screen' }, { 'secondScreen': 'Second Screen' }, { 'thirdScreen': 'PresenterTrack Display' }]
-    },
-    {
-        name: 'Dual Displays',
-        id: 'displayDbl',
-        key: 'DB',
-        frontImage: 'displayDbl-front.png',
-        topImage: 'displayDbl-top.png',
-        width: displayWidth * 2,
-        depth: displayDepth,
-        height: displayHeight,
-        diagonalInches: diagonalInches,
-        defaultVert: 1010,
-    },
-    {
-        name: 'Triple Displays',
-        id: 'displayTrpl',
-        key: 'DC',
-        frontImage: 'displayTrpl-front.png',
-        topImage: 'displayTrpl-top.png',
-        width: displayWidth * 3,
-        depth: displayDepth,
-        height: displayHeight,
-        diagonalInches: diagonalInches,
-        defaultVert: 1010,
-
-    },
-
-    {
-        name: 'Single 21:9 (MTR Only) display',
-        id: 'display21_9',
-        key: 'DD',
-        frontImage: 'display21_9-front.png',
-        topImage: 'displaySngl-top.png',
-        width: displayWidth21_9,
-        depth: displayDepth21_9,
-        height: displayHeight21_9,
-        diagonalInches: diagonalInches21_9,
-        defaultVert: 1010,
-    },
-    {
-        name: 'Projector Screen',
-        id: 'displayScreen',
-        key: 'DE',
-        frontImage: 'displayScreen-menu.png',
-        topImage: 'displayScreen-top.png',
-        width: displayWidth * 2,
-        depth: displayDepth * 0.7,
-        height: displayHeight & 2,
-        diagonalInches: diagonalInches * 2,
-        defaultVert: 1010,
-        roles: [{ 'singleScreen': 'Single Screen' }, { 'firstScreen': 'First Screen' }, { 'secondScreen': 'Second Screen' }, { 'thirdScreen': 'PresenterTrack Display' }]
-    },
-
-
-
-]
-
-/* Floor keys start with F */
-let stageFloors = [
-    {
-        name: 'Stage Floor (Box)',
-        id: 'stageFloor',
-        key: 'FA',
-        frontImage: 'box-front.png',
-        family: 'wallBox',
-        stroke: 'black',
-        strokeWidth: 2,
-        dash: [4, 8],
-        resizeable: ['width', 'depth', 'vheight']
-    },
-    {
-        name: 'Carpet*',
-        id: 'carpet',
-        key: 'FB',
-        frontImage: 'box-front.png',
-        family: 'wallBox',
-        stroke: 'grey',
-        strokeWidth: 4,
-        dash: [8, 3],
-        resizeable: ['width', 'depth', 'vheight']
-    }
-]
-
-
-/*  Boxes are a higher level than tables and can start with W */
-let boxes = [
-    {
-        name: 'Box',
-        id: 'box',
-        key: 'WD',
-        frontImage: 'box-front.png',
-        family: 'wallBox',
-        stroke: 'black',
-        strokeWidth: 2,
-        dash: [7, 5],
-        resizeable: ['width', 'depth', 'vheight']
-    },
-    {
-        name: 'Wall Builder - Multiple walls',
-        id: 'wallBuilder',
-        key: 'ZX',
-        frontImage: 'wallBuilder-menu.png',
-        strokeWidth: 1,
-        resizeable: []
-    }
-]
-
-let rooms = [
-    {
-        name: 'Irregular Room (polyRoom) Experimental**',
-        id: 'polyRoom',
-        key: 'ZY',
-        frontImage: 'pathShape-menu.png',
-        strokeWidth: 1,
-        fill: 'lightblue',
-        resizeable: []
-    },
-    {
-        name: 'Room Part (Experimental)**',
-        id: 'boxRoomPart',
-        key: 'ZZ',
-        frontImage: 'box-front.png',
-        family: 'wallBox',
-        stroke: 'darkgrey',
-        strokeWidth: 3,
-        fill: 'lightblue',
-        resizeable: ['width', 'depth', 'vheight']
-    }
-]
-
-expandVideoDeviceArray();
-
-/*
-    Purpuse to merge videoDevice array and camera array.
-    Each videoDevice can have a codecParent and a cameraParent.
-    If the parent device has an attribute missing on the child device, it is added to the child device.
-    cameraParent is applied before the codecParent.
-*/
-function expandVideoDeviceArray() {
-    videoDevices = videoDevices.concat(cameras);
-    videoDevices.forEach((primaryDevice, index) => {
-        if ("cameraParent" in primaryDevice) {
-            videoDevices.forEach((parentDevice) => {
-                if (primaryDevice.cameraParent == parentDevice.id) {
-
-                    let updatedDevice = {
-                        ...parentDevice,
-                        ...primaryDevice
-                    }
-
-                    videoDevices[index] = updatedDevice;
-
-                }
-            });
-        }
-    })
-
-    videoDevices.forEach((primaryDevice, index) => {
-        if ("codecParent" in primaryDevice) {
-            videoDevices.forEach((parentDevice) => {
-                if (primaryDevice.codecParent == parentDevice.id) {
-                    let updatedDevice = {
-                        ...parentDevice,
-                        ...primaryDevice
-                    }
-
-                    videoDevices[index] = updatedDevice;
-
-                }
-            });
-        }
-    })
-
-    /* Add camera only devices with camerOnly = true; */
-    videoDevices.forEach((primaryDevice, index) => {
-        cameras.forEach((camera) => {
-            if (camera.id === primaryDevice.id) {
-                videoDevices[index].cameraOnly = true;
-            }
-        })
-    });
-
-}
+// Note: expandVideoDeviceArray() logic is now handled by StaticDeviceProvider.getVideoDevices()
 
 
 creatArrayKeysTypes();
-/* UUUID is used for unique IDs for each shape and session. */
-function createUuid() {
-    return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, c =>
-        (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
-    );
-}
 
-function createRoomId() {
-    let roomId = createUuid();
-    return roomId;
-}
+// Note: createUuid, createRoomId, isTouchEnabled now imported from ./utils/common.js
 
-/* determine if touchenabled */
-function isTouchEnabled() {
-    return ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
-}
-
-/* On inputs.  Changes 5 ft 6 in to 5.5 ft.  Or 1 m to 3.28 ft. Or 10' 6" to 10.5. */
-function convertToUnit(input) {
-
-    input = input.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"'); // replace fancy quotes for iPhone
-
-    let measurement;
-
-    let regex = /(?<negative>-)?\s*((?<meter>[0-9.]*)\s*m)?\s*((?<cm>[0-9.]*)\s*c)?\s*((?<feet>[0-9.]*)\s*(ft\.?|'|feet|foot))?\s*((?<inch>[0-9.]*)\s*(i|"))?\s*(?<value>[0-9.]*)?/gmi;
-    let { negative, meter, cm, feet, inch, value } = regex.exec(input,).groups;
-
-    meter = Number(meter);
-    cm = Number(cm);
-    feet = Number(feet);
-    inch = Number(inch);
-    value = Number(value);
-
-    if (isNaN(meter)) {
-        meter = 0;
-    }
-
-    if (isNaN(cm)) {
-        cm = 0;
-    }
-
-    if (isNaN(feet)) {
-        feet = 0;
-    }
-
-    if (isNaN(inch)) {
-        inch = 0;
-    }
-
-    if (isNaN(value)) {
-        value = 0;
-    }
-
-    if (unit == 'feet') {
-        measurement = meter * 3.2808 + cm * 3.2808 / 100 + feet + inch / 12 + value;
-    }
-    else { // unit == meters
-        measurement = meter + cm / 100 + feet / 3.2808 + inch / 12 / 3.2808 + value;
-    }
-
-    if (negative == '-') {
-        measurement = measurement * -1;
-    }
-
-    return Math.round(measurement * 100) / 100;
-}
 
 
 function addOnBlurUnitInputListener() {
@@ -3736,13 +2315,7 @@ function blurRoom() {
 }
 
 
-function hasScrollbar(element) {
-
-    return element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth;
-}
-
-
-
+// Note: hasScrollbar now imported from ./utils/common.js
 
 function windowResizeEvent() {
     window.addEventListener('resize', windowResizeEventName);
@@ -3821,129 +2394,15 @@ function updateLabelUnits() {
 /* converts the roomObj2, used for exporting to meters for 3d Workspace file.  If the
 roomObj is already in meters, it  */
 function convertToMeters(roomObj2) {
-
-    let roomObjTemp = {};
-    roomObjTemp.room = {};
-    roomObjTemp.items = {};
-
-    let roomX;
-    let roomY;
-
-
-
-    Object.keys(roomObj2.items).forEach(key => {
-        roomObjTemp.items[key] = [];
+    return convertToMetersCore(roomObj2, {
+        activeRoomX,
+        activeRoomY,
+        activeRoomWidth,
+        activeRoomLength,
+        itemsOffStageId,
+        isActiveRoomPart,
+        round
     });
-
-    let ratio = 1;
-
-    if (roomObj2.unit === 'feet') {
-        ratio = 1 / 3.28084;
-    }
-    roomObjTemp.name = roomObj2.name;
-
-
-
-
-    roomX = ratio * (activeRoomX / 2 - (roomObj2.room.roomWidth - activeRoomWidth) / 2);
-    roomY = ratio * (activeRoomY / 2 - (roomObj2.room.roomLength - activeRoomLength) / 2);
-
-    roomX = ratio * (activeRoomX / 2 - (activeRoomWidth) / 2);
-    roomY = ratio * (activeRoomY / 2 - (activeRoomLength) / 2);
-
-    roomX = ratio * (activeRoomX - (roomObj2.room.roomWidth - activeRoomWidth) / 2);
-    roomY = ratio * (activeRoomY - (roomObj2.room.roomLength - activeRoomLength) / 2);
-
-
-    roomObjTemp.room.roomWidth = roomObj2.room.roomWidth * ratio;
-    roomObjTemp.room.roomLength = roomObj2.room.roomLength * ratio;
-
-    roomObjTemp.activeRoomLength = activeRoomLength * ratio;
-    roomObjTemp.activeRoomWidth = activeRoomWidth * ratio;
-    roomObjTemp.activeRoomX = roomX;
-    roomObjTemp.activeRoomY = roomY;
-
-    if (roomObj2.room.roomHeight) {
-        roomObjTemp.room.roomHeight = roomObj2.room.roomHeight * ratio;
-    } else {
-        roomObjTemp.room.roomHeight = 2.5;
-    }
-
-    if ('backgroundImage' in roomObj2) {
-        roomObjTemp.backgroundImage = {};
-        roomObjTemp.backgroundImage.x = roomObj2.backgroundImage.x * ratio;
-        roomObjTemp.backgroundImage.y = roomObj2.backgroundImage.y * ratio;
-        roomObjTemp.backgroundImage.width = roomObj2.backgroundImage.width * ratio;
-        roomObjTemp.backgroundImage.height = roomObj2.backgroundImage.height * ratio;
-        roomObjTemp.backgroundImage.rotation = roomObj2.backgroundImage.rotation;
-        roomObjTemp.backgroundImage.name = roomObj2.backgroundImage.name;
-        roomObjTemp.backgroundImage.opacity = roomObj2.backgroundImage.opacity;
-    }
-
-    for (const category in roomObj2.items) {
-        roomObjTemp.items[category] = [];
-        for (const i in roomObj2.items[category]) {
-
-            const isItemOnStage = !itemsOffStageId.includes(roomObj2.items[category][i].id)
-
-            if (isItemOnStage || isActiveRoomPart) {    /* only add the node if it is onstage */
-
-                let item = roomObj2.items[category][i];
-
-                if ('x' in item) {
-                    item.x = (item.x * ratio) - roomX;
-                }
-
-                if ('y' in item) {
-                    item.y = (item.y * ratio) - roomY;
-                }
-
-                if ('width' in item) {
-                    item.width = item.width * ratio;
-                }
-
-                if ('height' in item) {
-                    item.height = item.height * ratio;
-                }
-
-                if ('radius' in item) {
-                    item.radius = item.radius * ratio;
-                }
-
-                if ('data_zPosition' in item) {
-                    item.data_zPosition = round(item.data_zPosition * ratio);
-                }
-
-                if ('data_vHeight' in item) {
-                    item.data_vHeight = round(item.data_vHeight * ratio);
-                }
-
-                if ('tblRectRadius' in item) {
-                    item.tblRectRadius = round(item.tblRectRadius * ratio);
-                }
-
-                if ('data_trapNarrowWidth' in item) {
-                    item.data_trapNarrowWidth = round(item.data_trapNarrowWidth * ratio);
-                }
-
-                if ('tblRectRadiusRight' in item) {
-                    item.tblRectRadiusRight = round(item.tblRectRadiusRight * ratio);
-                }
-
-                if (isItemOnStage) {
-                    item.data_isItemOnStage = true;
-                } else {
-                    item.data_isItemOnStage = false;
-                }
-
-                roomObjTemp.items[category].push(item);
-            }
-        }
-
-    }
-
-    return roomObjTemp;
-
 }
 
 function toggleFeetMeters() {
@@ -4126,6 +2585,16 @@ function getQueryString() {
 
     const queryString = window.location.search;
     const urlParams = new URLSearchParams(queryString);
+
+    /* hideNewRoomDialog - must be parsed early, before dialog might be shown */
+    if (urlParams.has('hideNewRoomDialog')) {
+        let hideDialogParam = urlParams.get('hideNewRoomDialog');
+        hideNewRoomDialog = !(hideDialogParam === '0' || hideDialogParam === 'false');
+        if (hideNewRoomDialog) {
+            console.info('New room dialog is hidden. To show use ?hideNewRoomDialog=0');
+        }
+    }
+
     roomName = urlParams.get('roomName');
     roomName = DOMPurify.sanitize(roomName);
     roomObj.name = roomName;
@@ -5020,8 +3489,7 @@ function binaryToBase26(binary) {
     return letters;
 
     function createTable() {
-
-        alphabet = 'abcdefghijklmnopqrstuvwxyz';
+        const alphabet = 'abcdefghijklmnopqrstuvwxyz';
         let alphaArray = alphabet.split('');
         let array = [];
         let i = 0;
@@ -5638,9 +4106,7 @@ function drpVideoDeviceChange(firstRun = false) {
 
 }
 
-function getNumberValue(id) {
-    return parseFloat(document.getElementById(id).value);
-}
+// Note: getNumberValue now imported from ./utils/common.js
 
 function makeButtonsVisible() {
 
@@ -5690,19 +4156,7 @@ function kAddCenteredText(text, x1, y1, x2, y2, groups = '') {
 
 }
 
-/*  Geomerty reference: https://www2.clarku.edu/faculty/djoyce/trig/right.html
- formula distanceA = distanceB / (Tan degreeB) */
-
-function getDistanceA(degreeB, distanceB) {
-
-    return distanceB / (Math.tan((degreeB * Math.PI) / 180));
-}
-
-function getDistanceB(degreeB, distanceA) {
-    return (Math.tan((degreeB * Math.PI) / 180)) * distanceA;
-}
-
-
+// Note: getDistanceA, getDistanceB now imported from ./utils/geometry.js
 
 function drawOutsideWall(grOuterWall) {
 
@@ -6673,12 +5127,7 @@ function drawRoom(redrawShapes = false, dontCloseDetailsTab = false, dontSaveUnd
 
 }
 
-function getFullHeightIncludingMargin(element) {
-    const style = window.getComputedStyle(element);
-    const marginTop = parseFloat(style.marginTop);
-    const marginBottom = parseFloat(style.marginBottom);
-    return element.offsetHeight + marginTop + marginBottom;
-}
+// Note: getFullHeightIncludingMargin now imported from ./utils/common.js
 
 function changeTransparency(value = 50) {
     let konvaBackgroundImageFloor = getKonvaBackgroundImageFloor();
@@ -7278,7 +5727,6 @@ function createShareableLink() {
         items[category].forEach((item) => {
             strUrlQuery2 += createShareableLinkItem(item);
             i += 1;
-            previousItem = item;
         })
     }
 
@@ -7600,7 +6048,6 @@ function downloadCanvasPNG2(isSolidBackground = true) {
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-            delete link;
         }
 
         let stageDataUrl = stage.toDataURL({ pixelRatio: 5 });
@@ -7817,6 +6264,11 @@ function openSaveDialog() {
 }
 
 function openNewRoomDialog() {
+    // Skip showing the dialog if hideNewRoomDialog is enabled (e.g., when embedded in iframe)
+    if (hideNewRoomDialog) {
+        console.info('New room dialog suppressed (hideNewRoomDialog=true)');
+        return;
+    }
     document.getElementById('roomWidth2').value = roomObj.room.roomWidth;
     document.getElementById('roomLength2').value = roomObj.room.roomLength;
     document.getElementById('roomName2').value = roomObj.name;
@@ -8240,30 +6692,12 @@ function displayDistanceVisible(state = 'buttonPress') {
 
     if (state === 'buttonPress') {
         saveToUndo = true;
-        if (grDisplayDistance.visible() === true) {
-            state = false;
-        }
-        else {
-            state = true;
-        }
+        state = !grDisplayDistance.visible();
     }
 
-    if (state === true) {
-        button.classList.toggle('active', true);
-        // button.style["color"] = toggleButtonOnColor;
-        grDisplayDistance.visible(true);
-        // button.children[0].textContent = 'tv';
-        roomObj.layersVisible.grDisplayDistance = true;
-
-    } else {
-        button.classList.toggle('active', false);
-        // button.style["color"] = toggleButtonOffColor;
-        grDisplayDistance.visible(false);
-        // button.children[0].textContent = 'tv_off';
-        roomObj.layersVisible.grDisplayDistance = false;
-    }
-
-    // updateFormatDetailsUpdate();
+    grDisplayDistance.visible(state);
+    button.classList.toggle('active', state);
+    roomObj.layersVisible.grDisplayDistance = state;
 
     if (saveToUndo) saveToUndoArray();
 }
@@ -8275,30 +6709,14 @@ function labelsVisible(state = 'buttonPress') {
 
     if (state === 'buttonPress') {
         saveToUndo = true;
-        if (grLabels.visible() === true) {
-            state = false;
-        } else {
-            state = true;
-        }
+        state = !grLabels.visible();
     }
 
-    if (state === true) {
+    grLabels.visible(state);
+    button.classList.toggle('active', state);
+    roomObj.layersVisible.grLabels = state;
 
-        grLabels.visible(true);
-        button.classList.toggle('active', true);
-        roomObj.layersVisible.grLabels = true;
-    }
-    else {
-        grLabels.visible(false);
-        button.classList.toggle('active', false);
-        roomObj.layersVisible.grLabels = false;
-    }
-
-
-
-    if (saveToUndo) {
-        saveToUndoArray();
-    }
+    if (saveToUndo) saveToUndoArray();
 }
 
 function gridLinesVisible(state = 'buttonPress') {
@@ -8307,25 +6725,18 @@ function gridLinesVisible(state = 'buttonPress') {
 
     if (state === 'buttonPress') {
         saveToUndo = true;
-        if (kGroupLines.visible() === true) {
-            state = false;
-        } else {
-            state = true;
-        }
+        state = !kGroupLines.visible();
     }
 
     if (state === true) {
         layerGrid.visible(true);
-
         titleGroup.visible(true);
-
         grShadingCamera.clip(clipShadingBorder);
         grShadingMicrophone.clip(clipShadingBorder);
         kGroupLines.visible(true);
         button.classList.toggle('active', true);
         roomObj.layersVisible.gridLines = true;
-    }
-    else {
+    } else {
         button.classList.toggle('active', false);
         layerGrid.visible(true);
         kGroupLines.visible(false);
@@ -8336,14 +6747,11 @@ function gridLinesVisible(state = 'buttonPress') {
         roomObj.layersVisible.gridLines = false;
     }
 
-
-
     if (saveToUndo) saveToUndoArray();
 }
 
 
 function shadingCameraVisible(state = 'buttonPress') {
-
     closeTooltipTitleText();
 
     let button = document.getElementById('btnCamShadeToggle');
@@ -8351,23 +6759,12 @@ function shadingCameraVisible(state = 'buttonPress') {
 
     if (state === 'buttonPress') {
         saveToUndo = true;
-        if (grShadingCamera.visible() === true) {
-
-            state = false;
-        } else {
-            state = true;
-        }
+        state = !grShadingCamera.visible();
     }
 
-    if (state) {
-        button.classList.toggle('active', true);
-        grShadingCamera.visible(true);
-        roomObj.layersVisible.grShadingCamera = true;
-    } else {
-        button.classList.toggle('active', false);
-        grShadingCamera.visible(false);
-        roomObj.layersVisible.grShadingCamera = false;
-    }
+    grShadingCamera.visible(state);
+    button.classList.toggle('active', state);
+    roomObj.layersVisible.grShadingCamera = state;
 
     if (saveToUndo) saveToUndoArray();
 }
@@ -8378,28 +6775,15 @@ function shadingMicrophoneVisible(state = 'buttonPress') {
 
     let button = document.getElementById('btnMicShadeToggle');
     let saveToUndo = false;
+
     if (state === 'buttonPress') {
         saveToUndo = true;
-        if (grShadingMicrophone.visible() === true) {
-            state = false;
-        } else {
-            state = true;
-        }
+        state = !grShadingMicrophone.visible();
     }
 
-    if (state === true) {
-        grShadingMicrophone.visible(true);
-
-        button.classList.toggle('active', true);
-        roomObj.layersVisible.grShadingMicrophone = true;
-    } else {
-
-        button.classList.toggle('active', false);
-        grShadingMicrophone.visible(false);
-        roomObj.layersVisible.grShadingMicrophone = false;
-    }
-
-    // updateFormatDetailsUpdate();
+    grShadingMicrophone.visible(state);
+    button.classList.toggle('active', state);
+    roomObj.layersVisible.grShadingMicrophone = state;
 
     if (saveToUndo) saveToUndoArray();
 }
@@ -8409,26 +6793,15 @@ function shadingSpeakerVisible(state = 'buttonPress') {
 
     let button = document.getElementById('btnSpeakerShadeToggle');
     let saveToUndo = false;
+
     if (state === 'buttonPress') {
         saveToUndo = true;
-        if (grShadingSpeaker.visible() === true) {
-            state = false;
-        } else {
-            state = true;
-        }
+        state = !grShadingSpeaker.visible();
     }
 
-    if (state === true) {
-        grShadingSpeaker.visible(true);
-
-        button.classList.toggle('active', true);
-        roomObj.layersVisible.grShadingSpeaker = true;
-    } else {
-
-        button.classList.toggle('active', false);
-        grShadingSpeaker.visible(false);
-        roomObj.layersVisible.grShadingSpeaker = false;
-    }
+    grShadingSpeaker.visible(state);
+    button.classList.toggle('active', state);
+    roomObj.layersVisible.grShadingSpeaker = state;
 
     if (saveToUndo) saveToUndoArray();
 }
@@ -8810,7 +7183,7 @@ function updateRoomObjFromTrNode() {
             y = center.y;
         }
 
-        itemAttr = {
+        let itemAttr = {
             x: ((x - pxOffset) / scale) + activeRoomX,
             y: ((y - pyOffset) / scale) + activeRoomY,
             rotation: rotation,
@@ -9001,7 +7374,7 @@ function saveToUndoArray() {
 
 function insertTable(insertDevice, groupName, attrs, uuid, selectTrNode) {
 
-    let tblWallFlr, data_zPosition, data_vHeight, data_trapNarrowWidth, width2;
+    let tblWallFlr, data_zPosition, data_vHeight, data_trapNarrowWidth, width2, rotation;
     let width = 1220 / 1000 * scale; /* default width:  is about 4 feet */
     let height = 2440 / 1000 * scale; /* default table:  height is about 8 feet */
     let pixelX = scale * attrs.x + pxOffset - activeRoomX * scale;
@@ -9966,18 +8339,7 @@ function insertTable(insertDevice, groupName, attrs, uuid, selectTrNode) {
 
 }
 
-/* returns a clone of the node include the data_  items */
-function deepCopyNode(node) {
-    let newNode = node.clone();
-    let keys = Object.keys(node);
-    keys.forEach(key => {
-        if (key.startsWith('data_')) {
-            newNode[key] = node[key];
-        }
-    })
-
-    return newNode;
-}
+// Note: deepCopyNode now imported from ./utils/common.js
 
 /* The wallChairs object needs to be resized by deleting and reinserting or the background image does not size correctly */
 function updatWallChairsOnResize() {
@@ -10513,9 +8875,7 @@ function setDefaultBlankElements() {
 
 };
 
-function isNumeric(value) {
-    return !(typeof value === 'string' && value.trim() === '') && Number.isFinite(Number(value));
-}
+// Note: isNumeric now imported from ./utils/common.js
 
 function updateMultipleItems() {
 
@@ -11552,127 +9912,18 @@ function hightlightOverlayForDevice(opt, attributeType, highlight, checkbox) {
 }
 
 function toggleMicShadingSingleItem() {
-    let id = document.getElementById('itemId').innerText;
-    let parentGroup = document.getElementById('itemGroup').innerText;
-
-    /* this function should note be called if grShadingMicrophone === false, but in case it is, give the user feedback */
-    if (roomObj.layersVisible.grShadingMicrophone === false) {
-        document.getElementById('dialogSingleItemToggles').showModal();
-        return;
-    }
-
-    roomObj.items[parentGroup].forEach((item, index) => {
-        if (item.id === id) {
-            let node = stage.find('#' + id)[0];
-            if ('data_audioHidden' in item && item.data_audioHidden === true) {
-                // document.getElementById("btnMicShadeToggleSingleItem").children[0].textContent = 'mic';
-                stage.find('#audio~' + id)[0].visible(true);
-                delete node.data_audioHidden;
-                delete item.data_audioHidden;
-            } else {
-                stage.find('#audio~' + id)[0].visible(false);
-                node.data_audioHidden = true;
-                item.data_audioHidden = true;
-            }
-
-        }
-    });
-    canvasToJson();
-
+    toggleCoverageSingleItem('mic', { roomObj, stage, canvasToJson });
 }
 
 function toggleSpeakerShadingSingleItem() {
-    let id = document.getElementById('itemId').innerText;
-    let parentGroup = document.getElementById('itemGroup').innerText;
-
-    /* this function should not be called if grShadingSpeaker === false, but in case it is, give the user feedback */
-    if (roomObj.layersVisible.grShadingSpeaker === false) {
-        document.getElementById('dialogSingleItemToggles').showModal();
-        return;
-    }
-
-    roomObj.items[parentGroup].forEach((item, index) => {
-        if (item.id === id) {
-            let node = stage.find('#' + id)[0];
-            if ('data_speakerHidden' in item && item.data_speakerHidden === true) {
-                stage.find('#speaker~' + id)[0].visible(true);
-                delete node.data_speakerHidden;
-                delete item.data_speakerHidden;
-            } else {
-                stage.find('#speaker~' + id)[0].visible(false);
-                node.data_speakerHidden = true;
-                item.data_speakerHidden = true;
-            }
-
-        }
-    });
-    canvasToJson();
-
+    toggleCoverageSingleItem('speaker', { roomObj, stage, canvasToJson });
 }
 
 function toggleCamShadeSingleItem() {
-    let id = document.getElementById('itemId').innerText;
-    let parentGroup = document.getElementById('itemGroup').innerText;
-
-    if (roomObj.layersVisible.grShadingCamera === false) {
-        alert('To toggle this button, first toggle on the parent mics, cameras or display button found above the canvas drawing.');
-        // document.getElementById('dialogSingleItemToggles').showModal();
-        return;
-    }
-
-    roomObj.items[parentGroup].forEach((item, index) => {
-
-        if (item.id === id) {
-            let node = stage.find('#' + id)[0];
-            if ('data_fovHidden' in item && item.data_fovHidden === true) {
-                // document.getElementById("btnCamShadeToggleSingleItem").children[0].textContent = 'videocam';
-                stage.find('#fov~' + id)[0].visible(true);
-                /* insert value direct to canvas */
-                delete node.data_fovHidden; /* delete .data_fovHidden value direct in the Konva canvas */
-                delete item.data_fovHidden; /* delete .data_fovHidden direct to roomObj */
-            } else {
-                // document.getElementById("btnCamShadeToggleSingleItem").children[0].textContent = 'videocam_off';
-                stage.find('#fov~' + id)[0].visible(false);
-                node.data_fovHidden = true;
-                item.data_fovHidden = true;
-            }
-
-        }
-    });
-
-    canvasToJson();
+    toggleCoverageSingleItem('camera', { roomObj, stage, canvasToJson });
 }
-//
 function toggleDisplayDistanceSingleItem() {
-    let id = document.getElementById('itemId').innerText;
-    let parentGroup = document.getElementById('itemGroup').innerText;
-
-    if (roomObj.layersVisible.grDisplayDistance === false) {
-        document.getElementById('dialogSingleItemToggles').showModal();
-        return;
-    }
-
-
-    roomObj.items[parentGroup].forEach((item, index) => {
-        if (item.id === id) {
-            let node = stage.find('#' + id)[0];
-            if ('data_dispDistHidden' in item && item.data_dispDistHidden === true) {
-                // document.getElementById("btnDisplayDistanceSingleItem").children[0].textContent = 'tv';
-                stage.find('#dispDist~' + id)[0].visible(true);
-                delete item.data_dispDistHidden;
-                delete node.data_dispDistHidden;
-            } else {
-                // document.getElementById("btnDisplayDistanceSingleItem").children[0].textContent = 'tv_off';
-                stage.find('#dispDist~' + id)[0].visible(false);
-                item.data_dispDistHidden = true;
-                node.data_dispDistHidden = true;
-            }
-
-        }
-    });
-
-    canvasToJson();
-
+    toggleCoverageSingleItem('display', { roomObj, stage, canvasToJson });
 }
 
 dragElement(document.getElementById('floatingWorkspace'));
@@ -14186,13 +12437,7 @@ function enableCopyDelBtn() {
 
 
 
-/*
-    Rounds the number.  Default is to one-hundredth place, -2.  It drops trailing zeros if needed, unlike .toFixed()
-*/
-function round(inNumber, place = -2) {
-    let factor = 10 ** (-1 * place);
-    return Math.round(inNumber * factor) / factor;
-}
+// Note: round now imported from ./utils/common.js
 
 function updateRoomDetails() {
     let roomHeight = document.getElementById('roomHeight').value;
@@ -14394,125 +12639,58 @@ function populateMountFromUrl(newItem, place = -1) {
 
 
 
-/* Populate the drpColor drop menu if there are Colors for the item.  Colors are for the Workspace Designer */
+/**
+ * Generic function to populate a dropdown menu for item properties.
+ * Replaces populateDrpColor, populateDrpRole, and populateDrpMount.
+ * @param {object} item - The item to populate dropdown for
+ * @param {string} propertyName - Property name: 'colors', 'roles', or 'mounts'
+ * @param {string} dropdownId - ID of the dropdown element
+ * @param {string} containerDivId - ID of the container div to show/hide
+ */
+function populateDropdown(item, propertyName, dropdownId, containerDivId) {
+    const dropdown = document.getElementById(dropdownId);
+    const containerDiv = document.getElementById(containerDivId);
+
+    dropdown.options.length = 0; /* clear out all previous options */
+    containerDiv.style.display = 'none';
+
+    const deviceArrays = [videoDevices, microphones, chairs, displays];
+
+    for (const devices of deviceArrays) {
+        for (const device of devices) {
+            if (item.data_deviceid === device.id && propertyName in device && device[propertyName]) {
+                containerDiv.style.display = '';
+
+                device[propertyName].forEach(option => {
+                    const drpOption = new Option();
+                    if (typeof option === 'string') {
+                        drpOption.text = option;
+                        drpOption.value = option;
+                    } else {
+                        for (const [key, value] of Object.entries(option)) {
+                            drpOption.text = value;
+                            drpOption.value = key;
+                        }
+                    }
+                    dropdown.add(drpOption, undefined);
+                });
+                return; // Found the device, exit early
+            }
+        }
+    }
+}
+
+/* Wrapper functions for backwards compatibility */
 function populateDrpColor(item) {
-
-    document.getElementById('drpColor').options.length = 0; /* clear out all previous options */
-
-    document.getElementById('colorDiv').style.display = 'none';
-
-    videoDevices.forEach(populate);
-
-    microphones.forEach(populate);
-
-    chairs.forEach(populate);
-
-    displays.forEach(populate);
-
-    function populate(device) {
-        if (item.data_deviceid === device.id) {
-            if ('colors' in device && device.colors) {
-                document.getElementById('colorDiv').style.display = '';
-
-                device.colors.forEach(color => {
-                    let drpOption = new Option();
-
-                    /* determine if the object is a string or an object.  */
-                    if (typeof (color) === 'string') {
-                        drpOption.text = color;
-                        drpOption.value = color;
-                    } else {
-                        for (const [key, value] of Object.entries(color)) {
-                            drpOption.text = value;
-                            drpOption.value = key;
-                        }
-                    }
-                    document.getElementById('drpColor').add(drpOption, undefined);
-                })
-            }
-        }
-    }
+    populateDropdown(item, 'colors', 'drpColor', 'colorDiv');
 }
 
-
-/* Populate the drpRole drop menu if there are Roles for the item.  Roles are for the Workspace Designer */
 function populateDrpRole(item) {
-
-    document.getElementById('drpRole').options.length = 0; /* clear out all previous options */
-
-    document.getElementById('roleDiv').style.display = 'none';
-
-    videoDevices.forEach(populate);
-
-    microphones.forEach(populate);
-
-    chairs.forEach(populate);
-
-    displays.forEach(populate);
-
-    function populate(device) {
-        if (item.data_deviceid === device.id) {
-            if ('roles' in device) {
-                document.getElementById('roleDiv').style.display = '';
-
-                device.roles.forEach(role => {
-                    let drpOption = new Option();
-                    /* determine if the object is a string or an object.  */
-                    if (typeof (role) === 'string') {
-                        drpOption.text = role;
-                        drpOption.value = role;
-                    } else {
-                        for (const [key, value] of Object.entries(role)) {
-                            drpOption.text = value;
-                            drpOption.value = key;
-                        }
-                    }
-                    document.getElementById('drpRole').add(drpOption, undefined);
-                })
-            }
-        }
-    }
+    populateDropdown(item, 'roles', 'drpRole', 'roleDiv');
 }
 
-
-
-/* Populate the drpMount drop menu if there are Mounts for the item.  Mounts are for the Workspace Designer */
 function populateDrpMount(item) {
-
-    document.getElementById('drpMount').options.length = 0; /* clear out all previous options */
-
-    document.getElementById('mountDiv').style.display = 'none';
-
-    videoDevices.forEach(populate);
-
-    microphones.forEach(populate);
-
-    chairs.forEach(populate);
-
-    displays.forEach(populate);
-
-    function populate(device) {
-        if (item.data_deviceid === device.id) {
-            if ('mounts' in device) {
-                document.getElementById('mountDiv').style.display = '';
-
-                device.mounts.forEach(mount => {
-                    let drpOption = new Option();
-                    /* determine if the object is a string or an object.  */
-                    if (typeof (mount) === 'string') {
-                        drpOption.text = mount;
-                        drpOption.value = mount;
-                    } else {
-                        for (const [key, value] of Object.entries(mount)) {
-                            drpOption.text = value;
-                            drpOption.value = key;
-                        }
-                    }
-                    document.getElementById('drpMount').add(drpOption, undefined);
-                })
-            }
-        }
-    }
+    populateDropdown(item, 'mounts', 'drpMount', 'mountDiv');
 }
 
 /* used to updateFormatDetailsTab based on the id shown on the webpage */
@@ -16893,255 +15071,7 @@ function floatingWorkspaceResize(size) {
 
 }
 
-/* key commands */
-function onKeyDown(e) {
-    const { key, target } = e;
-    const { tagName } = target;
-    const DELTA = 1; /* change in key movement in Canvas pixel */
-    let isShortCutKeyUsed = false;
-
-    if ((key === ',' || key === '.') && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-    }
-
-    if (blockKeyActions) return;
-
-    if ((key === 'r') && e.shiftKey && (e.ctrlKey || e.metaKey)) return; /* allow for a hard refresh. */
-
-    /* export to the Workspace Designer */
-    if (key === 'e' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        downloadFileWorkspace();
-    }
-
-    if ((key === ',' || key === '.') && (e.ctrlKey || e.metaKey)) {
-        if (key === ',') {
-
-            rotateRoom(-90);
-        } else if (key === '.') {
-
-            rotateRoom(90);
-        }
-    }
-
-    /* save / download VRC JSON file */
-    if (key === 's' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        downloadRoomObj();
-    }
-
-    if (key === 'm' && (e.ctrlKey)) {
-        measuringToolOn(true);
-    }
-
-
-    if (((key === 'o') || (key === 'i')) && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        document.getElementById('fileUpload').click();
-    }
-
-    if (testiFrame && ((key === 'w' || key === '3') && (e.ctrlKey || e.metaKey))) {
-
-        e.preventDefault();
-        testiFrameToggle(true);
-    }
-
-    const inputElements = ['input', 'textarea']
-
-    {
-        if (key === ' ' && !inputElements.includes(target.tagName?.toLowerCase())) {
-            quickAddMouse.x = mouseUnit.x;
-            quickAddMouse.y = mouseUnit.y;
-            toggleQuickAdd(true);
-        }
-
-
-        if (!inputElements.includes(target.tagName?.toLowerCase()) && (!(e.ctrlKey || e.metaKey))) {
-
-            if (isWallBuilderOn) {
-                if (key === 's') {
-                    changeWallBuilderWall(key);
-                } else if (key === 'g') {
-                    changeWallBuilderWall(key);
-                } else if (key === 'w') {
-                    changeWallBuilderWall(key);
-                } else if (key === 'c') {
-                    changeWallBuilderWall(key);
-                }
-            }
-            else if ((key === 'c')) { /* camera coverage toggle */
-                shadingCameraVisible();
-                displayDistanceVisible(false);
-                shadingMicrophoneVisible(false);
-            }
-            else if ((key === 'd')) { /* display coverage toggle */
-                shadingCameraVisible(false);
-                displayDistanceVisible();
-                shadingMicrophoneVisible(false);
-            }
-            else if ((key === 'm')) { /* display mic coverage toggle */
-                shadingCameraVisible(false);
-                displayDistanceVisible(false);
-                shadingMicrophoneVisible();
-            }
-        }
-    }
-
-
-
-    if (['INPUT', 'TEXTAREA', 'BUTTON'].includes(tagName)) return;
-
-    if (key === 'Shift') {
-        isShiftKeyDown = true;
-    }
-
-
-
-    /* duplicate item takes time, so prevent default anytime the D key is pressed */
-    if (key === 'd') {
-        e.preventDefault();
-    }
-
-    if (key === 'Backspace' || key === 'Delete') {
-        deleteTrNodes();
-        isShortCutKeyUsed = true;
-    }
-    else if ((key === 'Escape' || key === 'Esc')) {
-        if (isMeasuringToolOn) {
-            hideMeasuringTool()
-
-        }
-
-        closeAllDialogModals();
-
-        if (isWallBuilderOn && wallBuilderWritingState !== 'none') {
-
-            wallBuilderRestart();
-        } else if (isWallBuilderOn) {
-            wallBuilderOn(false);
-        }
-
-        if (isWallWriterOn2 && wallWriterConnectorLine2.isVisible()) {
-            wallBuilderRestart2();
-        } else if (isWallWriterOn2) {
-            wallBuilderOn2(false);
-        }
-
-
-        if (!(simplePathEditorId === '' || simplePathEditorId === 'none')) {
-            polyBuilderOn(false);
-            updateItem();
-        } else if (isPolyBuilderOn) {
-            polyBuilderOn(false);
-        }
-
-
-        e.preventDefault();
-        toggleQuickAdd(false);
-        tr.nodes([]);
-        enableCopyDelBtn();
-    }
-    else if ((key === 'z') && e.shiftKey && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        btnRedoClicked();
-        isShortCutKeyUsed = true;
-    }
-    else if (e.ctrlKey || e.metaKey) {
-
-        if (key === 'y' || key === 'z' || key === 'r') {
-            e.preventDefault();
-        }
-
-        if (key === 'y' & redoArray.length > 0) {
-            isShortCutKeyUsed = true;
-        }
-        else if (key === 'z' && undoArray.length > 1) {
-            btnUndoClicked();
-            isShortCutKeyUsed = true;
-        }
-        else if (key === 'd' && tr.nodes().length > 0) {
-            e.preventDefault();
-            duplicateItems();
-            isShortCutKeyUsed = true;
-        } else if (key === 'c') {
-            copyItems();
-            isShortCutKeyUsed = true;
-        } else if (key === 'v') {
-            pasteItems(false);
-            isShortCutKeyUsed = true;
-        } else if (key === 'x') {
-            cutItems();
-            isShortCutKeyUsed = true;
-        } else if (key === 'r') {
-            e.preventDefault();
-            rotateTrNodeItems();
-            isShortCutKeyUsed = true;
-        }
-        // else if (key === 'f'){
-        //     e.preventDefault();
-        //     flipItems();
-        //     isShortCutKeyUsed = true;
-        // }
-    }
-
-
-
-
-    tr.nodes().forEach(shape => {
-
-        if (e.ctrlKey || e.metaKey) {
-
-            if (e.keyCode === 37) {
-                // rotateNodeAroundCenter(shape, DELTA);
-            } else if (e.keyCode === 38) {
-                if (!shape.data_zPosition) {
-                    shape.data_zPosition = 0;
-                }
-                shape.data_zPosition = round(shape.data_zPosition + DELTA * 0.01);
-
-                isShortCutKeyUsed = true;
-            } else if (e.keyCode === 39) {
-                //
-            } else if (e.keyCode === 40) {
-
-                if (!shape.data_zPosition) {
-                    shape.data_zPosition = 0;
-                }
-                shape.data_zPosition = round(shape.data_zPosition - DELTA * 0.01);
-
-                isShortCutKeyUsed = true;
-            }
-        } else {
-
-            if (e.keyCode === 37) {
-                shape.x(shape.x() - DELTA);
-                isShortCutKeyUsed = true;
-            } else if (e.keyCode === 38) {
-                shape.y(shape.y() - DELTA);
-                isShortCutKeyUsed = true;
-            } else if (e.keyCode === 39) {
-                shape.x(shape.x() + DELTA);
-                isShortCutKeyUsed = true;
-            } else if (e.keyCode === 40) {
-                shape.y(shape.y() + DELTA);
-                isShortCutKeyUsed = true;
-            }
-
-        }
-
-
-        if (isShortCutKeyUsed) {
-            e.preventDefault();
-            updateShading(shape);
-
-            lastKeyDownMovement = true;
-        }
-
-        if (tr.nodes().length === 1) {
-            updateFormatDetails(shape.id());
-        }
-    })
-}
+// onKeyDown removed - now using KeyboardHandlers module
 
 function quickAddFromButton(){
 
@@ -17354,37 +15284,6 @@ function expandChairs(item, unit = roomObj.unit) {
 
 }
 
-/* Don't let degrees be greater than 360 or less than -360 */
-function normalizeDegree(degree) {
-    degree = Number(degree);
-    while (degree > 359) {
-        degree = degree - 360;
-    }
-
-    while (degree < -359) {
-        degree = degree + 360;
-    }
-    return degree;
-}
-
-/* Rotate a point x, y around origin x,y a certain amount of degrees */
-function rotatePointAroundOrigin(pointX, pointY, originX, originY, angleInDegrees) {
-
-    const angleInRadians = angleInDegrees * Math.PI / 180;
-    const cosTheta = Math.cos(angleInRadians);
-    const sinTheta = Math.sin(angleInRadians);
-
-    const translatedX = pointX - originX;
-    const translatedY = pointY - originY;
-
-    const rotatedX = translatedX * cosTheta - translatedY * sinTheta;
-    const rotatedY = translatedX * sinTheta + translatedY * cosTheta;
-
-    const finalX = rotatedX + originX;
-    const finalY = rotatedY + originY;
-
-    return { x: finalX, y: finalY };
-}
 
 /*
 comeback to flipItems
@@ -17779,20 +15678,98 @@ function rotateNodeAroundCenter(node, rotationAmount) {
 
 }
 
-function onKeyUp(e) {
-    if (lastKeyDownMovement) canvasToJson();
-    lastKeyDownMovement = false;
+// onKeyUp removed - now using KeyboardHandlers module
 
-    if (e.key === 'Shift') {
-        isShiftKeyDown = false;
+// Initialize keyboard handlers module
+KeyboardHandlers.init({
+    get roomObj() { return roomObj; },
+    get stage() { return stage; },
+    get tr() { return tr; },
+    get canvasToJson() { return canvasToJson; },
+    get isWallBuilderOn() { return isWallBuilderOn; },
+    get isPolyBuilderOn() { return isPolyBuilderOn; },
+    get isMeasuringToolOn() { return isMeasuringToolOn; },
+    updateShading,
+    updateFormatDetails
+});
+
+// Register keyboard action handlers
+KeyboardHandlers.registerHandlers({
+    // File operations
+    save: () => downloadRoomObj(),
+    export: () => downloadFileWorkspace(),
+    open: () => document.getElementById('fileUpload').click(),
+
+    // Edit operations
+    undo: () => btnUndoClicked(),
+    redo: () => btnRedoClicked(),
+    copy: () => copyItems(),
+    paste: () => pasteItems(false),
+    cut: () => cutItems(),
+    duplicate: () => { if (tr.nodes().length > 0) duplicateItems(); },
+    rotate: () => rotateTrNodeItems(),
+    delete: () => deleteTrNodes(),
+
+    // View operations
+    rotateRoomLeft: () => rotateRoom(-90),
+    rotateRoomRight: () => rotateRoom(90),
+
+    // Tool toggles
+    toggleCamera: () => {
+        shadingCameraVisible();
+        displayDistanceVisible(false);
+        shadingMicrophoneVisible(false);
+    },
+    toggleDisplay: () => {
+        shadingCameraVisible(false);
+        displayDistanceVisible();
+        shadingMicrophoneVisible(false);
+    },
+    toggleMic: () => {
+        shadingCameraVisible(false);
+        displayDistanceVisible(false);
+        shadingMicrophoneVisible();
+    },
+    measuringTool: () => measuringToolOn(true),
+    quickAdd: () => {
+        quickAddMouse.x = mouseUnit.x;
+        quickAddMouse.y = mouseUnit.y;
+        toggleQuickAdd(true);
+    },
+
+    // Wall builder
+    wallStandard: () => changeWallBuilderWall('s'),
+    wallGlass: () => changeWallBuilderWall('g'),
+    wallWindow: () => changeWallBuilderWall('w'),
+    wallCustom: () => changeWallBuilderWall('c'),
+
+    // Escape handling
+    escape: () => {
+        if (isMeasuringToolOn) hideMeasuringTool();
+        closeAllDialogModals();
+        if (isWallBuilderOn && wallBuilderWritingState !== 'none') {
+            wallBuilderRestart();
+        } else if (isWallBuilderOn) {
+            wallBuilderOn(false);
+        }
+        if (isWallWriterOn2 && wallWriterConnectorLine2.isVisible()) {
+            wallBuilderRestart2();
+        } else if (isWallWriterOn2) {
+            wallBuilderOn2(false);
+        }
+        if (!(simplePathEditorId === '' || simplePathEditorId === 'none')) {
+            polyBuilderOn(false);
+            updateItem();
+        } else if (isPolyBuilderOn) {
+            polyBuilderOn(false);
+        }
+        toggleQuickAdd(false);
+        tr.nodes([]);
+        enableCopyDelBtn();
     }
-}
+});
 
-let lastKeyDownMovement = false;  /* keeps track if the last key command was a keyDown on the canvas to capture keyUp */
-
-document.addEventListener('keydown', onKeyDown);
-
-document.addEventListener('keyup', onKeyUp);
+KeyboardHandlers.enable();
 
 function turnOnBackgroundImageButtons() {
     document.getElementById('resizeBackgroundImageCheckBox').disabled = false;
@@ -18979,28 +16956,28 @@ function getLocationOfRoomKitEqxDisplay(item) {
 
 /* The  downloadFileWorkspace() determines if the Unit is meters or feet and converts roomObj temporarily to meters along with the Canvas drawing */
 
-// function downloadJsonFile() {
-//     let downloadRoomName;
-//     let roomObj2 = structuredClone(roomObj);
-//     if (konvaBackgroundImageFloor.name() != '') {
-//         roomObj2.backgroundImageSrc = backgroundImageFloor.src;
-//     }
-//     const link = document.createElement("a");
-//     const content = JSON.stringify(roomObj2, null, 5);
-//     const file = new Blob([content], { type: 'text/plain' });
+function downloadJsonFile() {
+    let downloadRoomName;
+    let roomObj2 = structuredClone(roomObj);
+    if (konvaBackgroundImageFloor.name() != '') {
+        roomObj2.backgroundImageSrc = backgroundImageFloor.src;
+    }
+    const link = document.createElement("a");
+    const content = JSON.stringify(roomObj2, null, 5);
+    const file = new Blob([content], { type: 'text/plain' });
 
-//     downloadRoomName = roomObj.name;
+    downloadRoomName = roomObj.name;
 
-//     if (downloadRoomName == '') {
-//         downloadRoomName = 'Video Room Calc';
-//     }
-//     link.href = URL.createObjectURL(file);
-//     downloadRoomName = downloadRoomName.replace(/[/\\?%*:|"<>]/g, '-');
-//     downloadRoomName = downloadRoomName.trim() + '.json';
-//     link.download = downloadRoomName;
-//     link.click();
-//     URL.revokeObjectURL(link.href);
-// }
+    if (downloadRoomName == '') {
+        downloadRoomName = 'Video Room Calc';
+    }
+    link.href = URL.createObjectURL(file);
+    downloadRoomName = downloadRoomName.replace(/[/\\?%*:|"<>]/g, '-');
+    downloadRoomName = downloadRoomName.trim() + '.json';
+    link.download = downloadRoomName;
+    link.click();
+    URL.revokeObjectURL(link.href);
+}
 
 function downloadFileWorkspace() {
 
@@ -19145,1113 +17122,52 @@ window.addEventListener(
     (event) => {
         if (event.origin.match(/https:\/\/.*(\.cisco|\.webex|)\.com$/) || event.origin.startsWith('https://collabexperience.com') || event.origin.startsWith('http://127.0.0.1')) {
             console.info('message received postMessage() back: ', event.data);
+
+            // Handle commands from parent iframe
+            if (event.data && typeof event.data === 'object') {
+                // Control hideNewRoomDialog setting
+                if ('hideNewRoomDialog' in event.data) {
+                    hideNewRoomDialog = !!event.data.hideNewRoomDialog;
+                    console.info('hideNewRoomDialog set to:', hideNewRoomDialog);
+                }
+
+                // Load a room from postMessage
+                if (event.data.loadRoom && typeof event.data.loadRoom === 'string') {
+                    loadTemplate(event.data.loadRoom);
+                    console.info('Room loaded from postMessage');
+                }
+            }
         }
     },
     false,
 );
 
 /* addDefaultsToWorkspaceObj() - looks at workspaceKey and compares to videoDevices, chairs, displays and microphones and adds the first role, model or color to the workspaceKey - overwriting if it already exists */
-
-addDefaultsToWorkspaceObj();
-
-function returnStringOfDefaultRoleColor(keyValue) {
-    let defaultRole;
-
-    if (typeof (keyValue[0]) === 'string') {
-        defaultRole = keyValue[0];
-
-    } else {
-        for (const [key, value] of Object.entries(keyValue[0])) {
-            defaultRole = key;
-        }
-    }
-
-    return defaultRole;
-}
-
-function addDefaultsToWorkspaceObj() {
-    compareAdd(videoDevices);
-    compareAdd(microphones);
-    compareAdd(displays);
-    compareAdd(chairs);
-
-    function compareAdd(items) {
-        let workspaceKeyArray = Object.keys(workspaceKey)
-        workspaceKeyArray.forEach(key => {
-            items.forEach((item) => {
-                if (item.id === key) {
-                    if ('roles' in item && item.roles) {
-                        workspaceKey[key].role = returnStringOfDefaultRoleColor(item.roles);
-                    }
-
-                    if ('colors' in item && item.colors) {
-                        workspaceKey[key].color = returnStringOfDefaultRoleColor(item.colors);
-                    }
-
-                    if ('mount' in item && item.mounts) {
-                        workspaceKey[key].mount = returnStringOfDefaultRoleColor(item.mounts);
-                    }
-                }
-            })
-        })
-    }
-
-}
+// Now imported from workspace/workspaceExport.js
+addDefaultsToWorkspaceObj(videoDevices, microphones, displays, chairs);
 
 
 
 function exportRoomObjToWorkspace() {
-
-    let swapXY = true;
-
-    let roomObj2 = structuredClone(roomObj);  /* clone roomObj to make changes to units */
-
-    roomObj2 = convertToMeters(roomObj2); /* convertToMeters() changes feet to meters and marks anything not on the canvas as data_hiddenInDesigner = true;  */
-
-    let activeRoomLength = roomObj2.activeRoomLength;
-    let activeRoomWidth = roomObj2.activeRoomWidth;
-    let activeRoomX = roomObj2.activeRoomX;
-    let activeRoomY = roomObj2.activeRoomY;
-
-
-    let workspaceObj = {};
-    workspaceObj.title = '';
-    workspaceObj.roomShape = {};
-    workspaceObj.roomShape.manual = true;
-
-    workspaceObj.roomShape.plant = false;
-
-    if (swapXY) {
-        workspaceObj.roomShape.width = roomObj2.room.roomWidth;
-        workspaceObj.roomShape.length = roomObj2.room.roomLength;
-    } else {
-        workspaceObj.roomShape.width = roomObj2.room.roomLength;
-        workspaceObj.roomShape.length = roomObj2.room.roomWidth;
-    }
-
-    ['leftwall', 'videowall', 'rightwall', 'backwall'].forEach(roomSurfaceId => {
-        if (roomObj.roomSurfaces[roomSurfaceId].door === 'none') {
-            delete roomObj.roomSurfaces[roomSurfaceId].door;
-        }
-    })
-
-    workspaceObj.roomShape.roomSurfaces = [
-        { ...{ objectId: 'leftwall' }, ...roomObj.roomSurfaces.leftwall },
-        { ...{ objectId: 'videowall' }, ...roomObj.roomSurfaces.videowall },
-        { ...{ objectId: 'rightwall' }, ...roomObj.roomSurfaces.rightwall },
-        { ...{ objectId: 'backwall' }, ...roomObj.roomSurfaces.backwall },
-
-    ]
-
-    /* the default walls roomShape format above is inserting a tree. Adding walls one at time but onnly for designer.cisco.com */
-    let altDefaultWall = true;
-
-    if (altDefaultWall === true && !roomObj.workspace.removeDefaultWalls) {
-        let backwall = {};
-        let leftwall = {};
-        let rightwall = {};
-        let videowall = {};
-
-        backwall.id = 'backwall';
-        backwall.x = -0.1 - activeRoomX;;
-        backwall.y = roomObj2.room.roomLength + 0.1 - activeRoomY;
-        backwall.data_zPosition = -0.10;
-        backwall.data_vHeight = roomObj2.room.roomHeight + 0.10;
-        backwall.rotation = -90;
-        backwall.width = 0.10;
-        backwall.height = roomObj2.room.roomWidth + 2 * 0.10;
-
-        videowall.id = 'videowall';
-        videowall.x = roomObj2.room.roomWidth + 0.10 - activeRoomX;
-        videowall.y = -0.1 - activeRoomY;
-        videowall.data_zPosition = -0.10;
-        videowall.data_vHeight = roomObj2.room.roomHeight + 0.10;
-        videowall.rotation = 90;
-        videowall.width = 0.10;
-        videowall.height = roomObj2.room.roomWidth + 2 * 0.10;
-
-        leftwall.id = 'leftwall';
-        leftwall.x = -0.1 - activeRoomX;
-        leftwall.y = 0 - activeRoomY;
-        leftwall.data_zPosition = 0;
-        leftwall.data_vHeight = roomObj2.room.roomHeight;
-        leftwall.rotation = 0;
-        leftwall.width = 0.10;
-        leftwall.height = roomObj2.room.roomLength;
-
-        rightwall.id = 'rightwall';
-        rightwall.x = roomObj2.room.roomWidth + 0.1 - activeRoomX;
-        rightwall.y = roomObj2.room.roomLength - activeRoomY;
-        rightwall.data_zPosition = 0;
-        rightwall.data_vHeight = roomObj2.room.roomHeight;
-        rightwall.rotation = 180;
-        rightwall.width = 0.1;
-        rightwall.height = roomObj2.room.roomLength;
-
-        [backwall, leftwall, rightwall, videowall].forEach(wall => {
-            let jsonLabel = {}
-
-            if (roomObj.roomSurfaces[wall.id].type === 'regular') {
-                wall.data_deviceid = 'wallStd';
-            }
-            else if (roomObj.roomSurfaces[wall.id].type === 'glass') {
-                wall.data_deviceid = 'wallGlass';
-            }
-            else if (roomObj.roomSurfaces[wall.id].type === 'window') {
-                wall.data_deviceid = 'wallWindow';
-            }
-
-            if ('acousticTreatment' in roomObj.roomSurfaces[wall.id]) {
-                jsonLabel.acousticTreatment = roomObj.roomSurfaces[wall.id].acousticTreatment;
-            }
-
-            if ('door' in roomObj.roomSurfaces[wall.id]) {
-                jsonLabel.door = roomObj.roomSurfaces[wall.id].door;
-            }
-
-            wall.data_labelField = JSON.stringify(jsonLabel);
-
-            roomObj2.items.tables.push(wall);
-
-        });
-
-
-    }
-
-    if ('roomHeight' in roomObj2.room) {
-        if ((roomObj2.room.roomHeight == 0 || roomObj2.room.roomHeight == '')) {
-            workspaceObj.roomShape.height = 2.5;
-        } else {
-            workspaceObj.roomShape.height = roomObj2.room.roomHeight;
-        }
-    }
-
-
-    if (roomObj.software) {
-        workspaceObj.meetingPlatform = roomObj.software;
-    }
-
-    workspaceObj.roomId = roomObj.roomId;
-
-    workspaceObj.customObjects = [];
-
-    workspaceObj.source = {};
-    workspaceObj.source.name = 'vrc';
-    workspaceObj.source.url = fullShareLinkCollabExpBase;
-    workspaceObj.source.version = version;
-
-    workspaceObj.data = {};
-    workspaceObj.data.vrc = {};
-    workspaceObj.data.vrc.workspace = {};
-    workspaceObj.data.vrc.workspace.theme = roomObj.workspace.theme || 'regular';
-
-    if ('backgroundImageFile' in roomObj && 'backgroundImage' in roomObj2) {
-        workspaceObj.data.vrc.backgroundImageFile = roomObj.backgroundImageFile;
-        workspaceObj.data.vrc.backgroundImage = roomObj2.backgroundImage;
-    }
-
-
-    if (altDefaultWall && document.getElementById('removeDefaultWallsCheckBox').checked === false) {
-        delete workspaceObj.roomShape;
-        let floor = {
-            x: roomObj2.room.roomWidth + 0.1 - activeRoomX,
-            y: 0 - activeRoomY,
-            rotation: 90,
-            data_deviceid: "floor",
-            id: "primaryFloor",
-            data_zPosition: -0.1,
-            data_vHeight: 0.1,
-            width: roomObj2.room.roomLength,
-            height: roomObj2.room.roomWidth + 0.2,
-        };
-
-
-        workspaceObjWallPush(floor);
-    }
-
-    if (document.getElementById('removeDefaultWallsCheckBox').checked === true) {
-        delete workspaceObj.roomShape;
-
-        let wallWidth = 0.10; /* Add in the floor width to include the outer wall */
-
-        let floor = {
-            x: roomObj2.room.roomWidth - activeRoomX,
-            y: 0 - activeRoomY,
-            rotation: 90,
-            data_deviceid: "floor",
-            id: "primaryFloor",
-            data_zPosition: -0.1,
-            data_vHeight: 0.1,
-            width: roomObj2.room.roomLength,
-            height: roomObj2.room.roomWidth
-        };
-
-
-        workspaceObjWallPush(floor);
-
-
-        let outerFloor = {
-            x: roomObj2.room.roomWidth + wallWidth - activeRoomX,
-            y: 0 - wallWidth - activeRoomY,
-            rotation: 90,
-            data_deviceid: "wall",
-            id: "secondary-outerFloor",
-            data_zPosition: -0.105,
-            data_vHeight: 0.1,
-            data_labelField: `{"color":"#CCC", "opacity": 0.97}`,
-            width: roomObj2.room.roomLength + wallWidth * 2,
-            height: roomObj2.room.roomWidth + wallWidth * 2
-        };
-
-        workspaceObjWallPush(outerFloor);
-
-    }
-
-    if ((roomObj.workspace.addCeiling === true && roomObj.workspace.removeDefaultWalls)) {
-        let wallWidth = 0;
-        let ceiling = {
-            "x": 0 - wallWidth - activeRoomX,
-            "y": 0 - wallWidth - activeRoomY,
-            "rotation": 0,
-            "data_deviceid": "ceiling",
-            "id": "ceiling",
-            "data_zPosition": roomObj2.room.roomHeight || defaultWallHeight,
-            "data_vHeight": 0.01,
-            "width": roomObj2.room.roomWidth + (wallWidth * 2),
-            "height": roomObj2.room.roomLength + (wallWidth * 2)
-        };
-
-        if (!swapXY) {
-            ceiling.width = roomObj2.room.roomLength;
-            ceiling.height = roomObj2.room.roomWidth;
-        }
-
-        workspaceObjWallPush(ceiling);
-    }
-
-
-    if (roomObj2.name == null || roomObj2.name == '') {
-        workspaceObj.title = 'Custom Room';
-    } else {
-        workspaceObj.title = roomObj2.name;
-    }
-
-    roomObj2.items.chairs.forEach((item) => {
-
-        if (item.data_deviceid === 'wheelchairTurnCycle') {
-            let newItem = structuredClone(item);
-            newItem.width = 1.5;
-            newItem.height = 1.5;
-            let xy = findUpperLeftXY(newItem);
-            let fakeTable = { data_deviceid: 'tblEllip', id: 'secondary-wheelChairRound-' + item.id, rotation: item.rotation, data_zPosition: -0.07, data_vHeight: 0.1, width: 1.5, height: 1.5, x: xy.x, y: xy.y };
-
-            workspaceObjTablePush(fakeTable);
-
-        }
-
-
-        if (item.data_deviceid.startsWith('doorDouble')) {
-            let leftDoor = structuredClone(item);
-            let rightDoor = structuredClone(item);
-            let deltaX = 0.51;
-
-            //  let deltaY = -1 * ((allDeviceTypes[item.data_deviceid].depth / 2 / 1000) - 0.05);
-            let deltaY = -1 * ((allDeviceTypes[item.data_deviceid].depth / 2 / 1000) - 0.05);
-
-            leftDoor.id = 'primary1-doorDouble-L-' + item.id;
-            leftDoor.data_deviceid = rightDoor.data_deviceid + 'Left';
-
-            rightDoor.id = 'primary2-dooorDouble-R-' + item.id;
-            rightDoor.data_deviceid = rightDoor.data_deviceid + 'Right';
-
-            let leftDoorXY = findNewTransformationCoordinate(item, deltaX, deltaY);
-            let rightDoorXY = findNewTransformationCoordinate(item, -deltaX, deltaY);
-
-            leftDoor.x = leftDoorXY.x;
-            leftDoor.y = leftDoorXY.y;
-
-            rightDoor.x = rightDoorXY.x;
-            rightDoor.y = rightDoorXY.y;
-
-            workspaceObjItemPush(rightDoor);
-            item = structuredClone(leftDoor); /* let Left door become the main item */
-        }
-
-        workspaceObjItemPush(item);
-
-
+    return exportRoomObjToWorkspaceCore(roomObj, {
+        activeRoomX,
+        activeRoomY,
+        activeRoomWidth,
+        activeRoomLength,
+        itemsOffStageId,
+        isActiveRoomPart,
+        defaultWallHeight,
+        fullShareLinkCollabExpBase,
+        version,
+        defaultRoomSurfaces,
+        removeDefaultWallsChecked: document.getElementById('removeDefaultWallsCheckBox')?.checked || false,
+        expandChairs,
+        round
     });
-
-    roomObj2.items.microphones.forEach((item) => {
-
-        if ((item.data_mount && item.data_mount.value.startsWith('ceilingMount')) || ((item.data_deviceid === 'ceilingMicPro') && !item.data_mount)) {
-            let ceilingMount = structuredClone(item);
-            let poleHeight = (roomObj2.room.roomHeight || defaultWallHeight) - (item.data_zPosition || 0);
-            ceilingMount.data_vHeight = poleHeight;
-            ceilingMount.data_deviceid = "ceilingMount";
-            ceilingMount.data_zPosition = item.data_zPosition + (poleHeight / 35); /* the ceilingMount is a little off in zPosition, so adjust slightly */
-            ceilingMount.id = "secondary-ceilingMount-" + item.id;
-            delete ceilingMount.data_mount;
-
-            workspaceObjItemPush(ceilingMount);
-
-            delete item.data_mount;
-
-        }
-
-
-        if (item.data_deviceid === 'ceilingMic') {
-            item.data_ceilingHeight = roomObj2.room.roomHeight;
-        }
-
-        workspaceObjItemPush(item);
-    });
-
-    roomObj2.items.tables.forEach((item) => {
-
-        if (item.data_deviceid) {
-            if (item.data_deviceid.startsWith('tbl') || item.data_deviceid.startsWith('couch')) {
-                workspaceObjTablePush(item);
-            }
-            else if (item.data_deviceid.startsWith('wallChairs')) {
-
-                let chairs = expandChairs(item, 'meters');
-                chairs.forEach(chair => {
-                    workspaceObjItemPush(chair);
-                });
-            }
-            else if (item.data_deviceid === 'sphere' || item.data_deviceid === 'cylinder') {
-
-                workspaceObjWallPush(item);
-            }
-            else if (item.data_deviceid === 'pathShape') {
-                workspaceObjItemPush(item);
-            }
-            else if (item.data_deviceid.startsWith('wall') || item.data_deviceid.startsWith('column') || item.data_deviceid.startsWith('floor') || item.data_deviceid.startsWith('box')) {
-                workspaceObjWallPush(item);
-            }
-        }
-    });
-
-    roomObj2.items.stageFloors.forEach((item) => {
-        if (item.data_deviceid) {
-
-            if (item.data_deviceid.startsWith('stageFloor')) {
-                if (item.id.startsWith('stage') || item.id.startsWith('step')) {
-                    // do nothing for stage or step objects
-                } else {
-                    item.id = 'stageFloor~' + item.id;
-                }
-
-                workspaceObjWallPush(item);
-            }
-            else if (item.data_deviceid.startsWith('carpet')) {
-                workspaceObjWallPush(item);
-            }
-        }
-    });
-
-    roomObj2.items.boxes.forEach((item) => {
-        workspaceObjWallPush(item);
-    });
-
-
-    roomObj2.items.rooms.forEach((item) => {
-        workspaceObjWallPush(item);
-    });
-
-    roomObj2.items.videoDevices.forEach((item) => {
-        /* Adjust the height and create a pole for a flipped camera */
-        if (item.data_mount && item.data_mount.value.startsWith('flippedPole')) {
-
-            /* only adjust height on ptz4KMount2 and ptzVision2. The original ptz4kMount and ptzVision stay the same. */
-            if (item.data_deviceid === 'ptz4kMount2' || item.data_deviceid === 'ptzVision2') {
-                item.data_zPosition = item.data_zPosition + allDeviceTypes[item.data_deviceid].height / 1000;
-            }
-
-            let pole = {};
-            let poleHeight = (roomObj2.room.roomHeight || defaultWallHeight) - (item.data_zPosition || 0);
-            pole.width = 0.04;
-            pole.height = 0.04;
-            let poleXY = findNewTransformationCoordinate(item, pole.width / 2, pole.width / 2);
-            pole.x = poleXY.x;
-            pole.y = poleXY.y;
-            pole.data_zPosition = (item.data_zPosition || 0);
-            pole.data_vHeight = poleHeight;
-            pole.width = 0.04;
-            pole.height = 0.04;
-            pole.rotation = item.rotation;
-            pole.data_deviceid = "box";
-            pole.data_labelField = '{"color":"#999999"}';
-            pole.id = "secondary-flippedPoleMount-" + item.id;
-            workspaceObjWallPush(pole);
-        }
-
-        if (item.data_mount && item.data_mount.value === 'flipped') {
-            if (item.data_deviceid === 'ptz4kMount2' || item.data_deviceid === 'ptzVision2') {
-                item.data_zPosition = item.data_zPosition + allDeviceTypes[item.data_deviceid].height / 1000;
-            }
-        }
-
-
-        workspaceObjItemPush(item);
-    });
-
-    roomObj2.items.displays.forEach((item) => {
-
-        let displayRatio = 1.02;
-
-        if (item.data_deviceid === 'displayDbl' || item.data_deviceid === 'displayTrpl') {
-            let leftDisplay = structuredClone(item);
-            let rightDisplay = structuredClone(item);
-            let centerDisplay = structuredClone(item);
-            let deltaX = (item.data_diagonalInches / 12 / 3.804 * displayRatio) / 2; /* convert inches to meters, multiply by ratio and take half */
-            if (item.data_deviceid === 'displayTrpl') {
-                deltaX = deltaX * 1.98;
-                centerDisplay.data_deviceid = 'displaySngl';
-                centerDisplay.id = 'centerScreen~' + centerDisplay.id;
-                centerDisplay.role = 'firstScreen';
-                workspaceObjDisplayPush(centerDisplay);
-
-            }
-            let deltaY = 0;
-
-            let leftDisplayXY = findNewTransformationCoordinate(item, -deltaX, deltaY);
-            let rightDisplayXY = findNewTransformationCoordinate(item, deltaX, deltaY);
-
-            leftDisplay.data_deviceid = 'displaySngl';
-            leftDisplay.id = 'screen-L~' + leftDisplay.id;
-            leftDisplay.x = leftDisplayXY.x;
-            leftDisplay.y = leftDisplayXY.y;
-            leftDisplay.role = 'secondScreen';
-            workspaceObjDisplayPush(leftDisplay);
-
-            rightDisplay.data_deviceid = 'displaySngl';
-            rightDisplay.id = 'screen-R~' + rightDisplay.id;
-
-            rightDisplay.x = rightDisplayXY.x;
-            rightDisplay.y = rightDisplayXY.y;
-            rightDisplay.role = 'firstScreen';
-
-            workspaceObjDisplayPush(rightDisplay);
-
-        } else {
-            item.role = 'firstScreen';
-            workspaceObjDisplayPush(item);
-        }
-    })
-
-
-    function workspaceObjItemPush(newItem) {
-
-        let x, y, attr;
-        let z = 0;
-        let item = structuredClone(newItem);
-
-        /* plants will be converted to christmas trees. Note: scale is different */
-        if (item.data_deviceid === 'plant' && roomObj.workspace.theme === 'christmas') {
-            item.data_deviceid = 'tree';
-        }
-
-        if ((item.data_deviceid in workspaceKey)) {
-            attr = workspaceKey[item.data_deviceid];
-        } else {
-            /* need to write to log and on screen for end user */
-            console.info('Item not in workSpaceKey', item.data_deviceid);
-            attr = workspaceKey.customVRC;
-            attr.model = item.data_deviceid;
-        }
-
-        if (item.data_deviceid.startsWith('roomKitEqx')) {
-
-            let newData_zPosition, deltaY;
-            let leftDisplay = structuredClone(item);
-            let rightDisplay = structuredClone(item);
-            let displayRatio = 1.02;
-
-            /* if the data_zPosition (height) is blank or null, set to 0 */
-            if (!item.data_zPosition) {
-                item.data_zPosition = 0;
-            }
-
-            let deltaX = (item.data_diagonalInches / 12 / 3.804 * displayRatio) / 2; /* convert inches to meters, multiply by ratio and take half */
-
-            let newDisplayHeight = item.data_diagonalInches / diagonalInches * displayHeight / 1000;
-
-            if (item.data_deviceid === 'roomKitEqxFS') {
-                // newData_zPosition = 1.8 + Number(item.data_zPosition) - newDisplayHeight;
-                newData_zPosition = 1.76 + Number(item.data_zPosition) - newDisplayHeight;
-                deltaY = -0.07;
-            }
-            else if (item.data_deviceid === 'roomKitEqxWS') {
-                newData_zPosition = 1.76 + Number(item.data_zPosition) - newDisplayHeight;
-                deltaY = -0.12;
-            }
-            else {
-                newData_zPosition = 1.081 + Number(item.data_zPosition) - newDisplayHeight;
-                deltaY = -0.12;
-            }
-
-            let leftDisplayXY = findNewTransformationCoordinate(item, -deltaX, deltaY);
-            let rightDisplayXY = findNewTransformationCoordinate(item, deltaX, deltaY);
-
-            leftDisplay.data_deviceid = 'displaySngl';
-            leftDisplay.id = 'display-KitEQX-L~' + item.data_deviceid + '-' + leftDisplay.id;
-            leftDisplay.x = leftDisplayXY.x;
-            leftDisplay.y = leftDisplayXY.y;
-            leftDisplay.data_zPosition = newData_zPosition;
-            leftDisplay.role = 'secondScreen';
-            workspaceObjDisplayPush(leftDisplay);
-
-            rightDisplay.data_deviceid = 'displaySngl';
-            rightDisplay.id = 'display-KitEQX-R~' + item.data_deviceid + '-' + rightDisplay.id;
-
-            rightDisplay.x = rightDisplayXY.x;
-            rightDisplay.y = rightDisplayXY.y;
-            rightDisplay.data_zPosition = newData_zPosition;
-            rightDisplay.role = 'firstScreen';
-
-            workspaceObjDisplayPush(rightDisplay);
-
-        }
-
-
-        if ('data_zPosition' in item) {
-            if (item.data_zPosition != "") z = item.data_zPosition;
-        }
-
-
-        if ('yOffset' in attr || 'xOffset' in attr || 'data_labelField' in item) {
-            let yOffset = 0;
-            let xOffset = 0;
-
-
-            if ('yOffset' in attr) yOffset = attr.yOffset;
-            if ('xOffset' in attr) xOffset = attr.xOffset;
-
-            if ('data_labelField' in item) {
-                let labelParsed = parseDataLabelFieldJson(item);
-                if (labelParsed) {
-                    xOffset = labelParsed.xOffset || xOffset;
-                    yOffset = labelParsed.yOffset || yOffset;
-                }
-            }
-
-            let newXY = findNewTransformationCoordinate(item, xOffset, yOffset);
-
-            item.y = newXY.y;
-            item.x = newXY.x;
-        }
-
-        x = (item.x - (roomObj2.room.roomWidth) / 2);
-        y = (item.y - (roomObj2.room.roomLength) / 2);
-
-        if ('vertOffset' in attr) {
-            z = z + attr.vertOffset;
-        }
-
-        if (item.data_deviceid === 'cylinder' || item.data_deviceid === 'sphere') {
-            x = x + item.width / 2;
-            y = y + item.width / 2;
-        }
-
-        let workspaceItem = {
-            id: item.id,
-            "position": [
-                (swapXY ? x : y),
-                z,
-                (swapXY ? y : x)
-            ],
-            "rotation": [
-                ((item.data_tilt) * (Math.PI / 180)) || 0,
-                ((item.rotation) * -(Math.PI / 180)),
-                ((item.data_slant) * (Math.PI / 180)) || 0,
-            ]
-        }
-
-        workspaceItem = { ...workspaceItem, ...attr };
-
-        delete workspaceItem.idRegex;
-
-        if (item.data_deviceid === 'sphere') {
-            workspaceItem.radius = item.width / 2;
-        }
-
-        if (item.data_deviceid === 'cylinder') {
-            let zPosition = item.data_zPosition || 0;
-            z = zPosition - (item.width / 2);
-        }
-
-        if ('data_role' in item && item.data_role) {
-            workspaceItem.role = item.data_role.value;
-            if (workspaceItem.role === 'presentertrack2') {
-                workspaceItem.role = 'presentertrack';
-            } else if (workspaceItem.role === 'crossviewPresenterTrack') {
-                workspaceItem.role = 'crossview+presentertrack'
-            }
-        }
-
-        if ('data_ceilingHeight' in item && item.data_ceilingHeight) {
-            workspaceItem.ceilingHeight = item.data_ceilingHeight;
-        }
-
-        if ('data_isItemOnStage' in item) {
-            workspaceItem.ignore = !item.data_isItemOnStage;
-        }
-
-        if ('data_color' in item && item.data_color) {
-            workspaceItem.color = item.data_color.value;
-        }
-
-        if ('data_mount' in item && item.data_mount) {
-            /* items like the PTZ 4K camera may be flipped */
-            if (item.data_mount.value.startsWith('flipped')) {
-                workspaceItem.scale = [1, -1, 1];
-            }
-            else if (item.data_mount.value.startsWith('stdMount')) {
-                workspaceItem.scale = [1, 1, 1];
-            }
-            else {
-                workspaceItem.mount = item.data_mount.value;
-            }
-        }
-
-        if (item.data_deviceid.startsWith('ceilingMount')) {
-            workspaceItem.scale = [1, item.data_vHeight, 1];
-        };
-
-        /* coverage of analog Ceiling Mic shows 180 from above */
-        if (item.data_deviceid === 'ceilingMic') {
-            workspaceItem.sphere = 'quarter';
-        }
-
-        if (item.data_hiddenInDesigner) {
-            workspaceItem.hidden = true;
-        }
-
-        if ('data_vHeight' in item && item.data_vHeight && item.data_deviceid === 'pathShape') {
-            workspaceItem.thickness = item.data_vHeight;
-        }
-
-        if ('data_labelField' in item) {
-            workspaceItem = parseDataLabelFieldJson(item, workspaceItem);
-        }
-
-        if ('vertOffset' in workspaceItem) {
-            delete workspaceItem.vertOffset;
-        }
-
-        if ('yOffset' in workspaceItem) {
-            delete workspaceItem.yOffset;
-        }
-
-        if ('xOffset' in workspaceItem) {
-            delete workspaceItem.xOffset;
-        }
-
-        workspaceObj.customObjects.push(workspaceItem);
-    }
-
-    function workspaceObjDisplayPush(item) {
-
-        let x, y;
-        let z = displayHeight / 1000;
-        let displayScale = item.data_diagonalInches / diagonalInches;
-        let attr = workspaceKey[item.data_deviceid];
-
-
-        if (item.data_deviceid === 'display21_9') {
-            z = displayHeight21_9 / 1000;
-            displayScale = item.data_diagonalInches / diagonalInches21_9;
-            item.role = 'ultrawide';
-
-        }
-
-        z = z * displayScale / 2; /* center of display */
-
-        if ('data_zPosition' in item) {
-            if (item.data_zPosition != "") {
-                z = item.data_zPosition + z;
-            };
-        }
-
-        if ('yOffset' in attr || 'xOffset' in attr || 'data_labelField' in item) {
-            let yOffset = 0;
-            let xOffset = 0;
-
-
-            if ('yOffset' in attr) yOffset = attr.yOffset;
-            if ('xOffset' in attr) xOffset = attr.xOffset;
-
-            if ('data_labelField' in item) {
-                let labelParsed = parseDataLabelFieldJson(item);
-                if (labelParsed) {
-                    xOffset = labelParsed.xOffset || xOffset;
-                    yOffset = labelParsed.yOffset || yOffset;
-                }
-            }
-
-            let newXY = findNewTransformationCoordinate(item, xOffset, yOffset);
-
-            item.y = newXY.y;
-            item.x = newXY.x;
-        }
-
-        x = (item.x - (roomObj2.room.roomWidth) / 2);
-        y = (item.y - (roomObj2.room.roomLength) / 2);
-
-        let workspaceItem = {
-            id: item.id,
-            "position": [
-                (swapXY ? x : y),
-                z,
-                (swapXY ? y : x)
-            ],
-            "rotation": [
-                ((item.data_tilt) * (Math.PI / 180)) || 0,
-                ((item.rotation) * -(Math.PI / 180)),
-                ((item.data_slant) * (Math.PI / 180)) || 0,
-            ],
-            size: item.data_diagonalInches,
-            "role": item.role
-        }
-
-        workspaceItem = { ...attr, ...workspaceItem };
-        delete workspaceItem.idRegex;
-
-        if ('data_role' in item && item.data_role) {
-            workspaceItem.role = item.data_role.value;
-        }
-
-        if ('data_color' in item && item.data_color) {
-            workspaceItem.color = item.data_color.value;
-        }
-
-        if ('data_mount' in item && item.data_mount) {
-            workspaceItem.mount = item.data_mount.value;
-        }
-
-        if (item.data_hiddenInDesigner) {
-            workspaceItem.hidden = true;
-        }
-
-
-        if ('data_labelField' in item) {
-            workspaceItem = parseDataLabelFieldJson(item, workspaceItem);
-        }
-
-        if ('data_isItemOnStage' in item) {
-            workspaceItem.ignore = !item.data_isItemOnStage;
-        }
-
-        if ('yOffset' in workspaceItem) {
-            delete workspaceItem.yOffset;
-        }
-
-        if ('xOffset' in workspaceItem) {
-            delete workspaceItem.xOffset;
-        }
-
-        workspaceObj.customObjects.push(workspaceItem);
-    }
-
-    function workspaceObjTablePush(item) {
-
-        let x, y, z, vh, workspaceItem;
-        z = 0;
-        vh = 0;
-
-        let xy = getItemCenter(item);
-
-        let attr = workspaceKey[item.data_deviceid];
-
-        x = (xy.x - roomObj2.room.roomWidth / 2);
-        y = (xy.y - roomObj2.room.roomLength / 2);
-
-        if ('yOffset' in attr || 'xOffset' in attr || 'data_labelField' in item) {
-            let yOffset = 0;
-            let xOffset = 0;
-
-            if ('yOffset' in attr) yOffset = attr.yOffset;
-            if ('xOffset' in attr) xOffset = attr.xOffset;
-
-            if ('data_labelField' in item) {
-                let labelParsed = parseDataLabelFieldJson(item);
-                if (labelParsed) {
-                    xOffset = labelParsed.xOffset || xOffset;
-                    yOffset = labelParsed.yOffset || yOffset;
-                }
-            }
-
-            let newXY = findNewTransformationCoordinate({ x: x, y: y, rotation: item.rotation }, xOffset, yOffset);
-
-            y = newXY.y;
-            x = newXY.x;
-        }
-
-        if ('data_zPosition' in item) {
-            if (item.data_zPosition != "") z = item.data_zPosition;
-        } else {
-            z = 0;
-        }
-
-        if ('data_vHeight' in item) {
-            if (item.data_vHeight != "") {
-                vh = item.data_vHeight + vh;
-            } else {
-                vh = null;
-            }
-        }
-
-        workspaceItem = {
-            id: item.id,
-            "position": [
-                (swapXY ? x : y),
-                z,
-                (swapXY ? y : x)
-            ],
-            "rotation": [
-                ((item.data_tilt) * (Math.PI / 180)) || 0,
-                ((item.rotation) * -(Math.PI / 180)),
-                ((item.data_slant) * (Math.PI / 180)) || 0,
-            ],
-            "width": item.width,
-            "length": item.height
-        }
-
-        if (vh) {
-            workspaceItem.height = vh;
-        }
-
-        /* tblSchoolDesk does not support radius or radiusRight in the Workspace Designer, remove if present */
-        if ('tblRectRadius' in item && item.data_deviceid != 'tblSchoolDesk') {
-            workspaceItem.radius = item.tblRectRadius;
-        }
-
-        if ('tblRectRadiusRight' in item && item.data_deviceid != 'tblSchoolDesk') {
-            workspaceItem.radiusRight = item.tblRectRadiusRight;
-        }
-
-        /* flip school desks around when converting from the VRC to the Designer.  This way the desk is facing forward when rendered */
-        if (item.data_deviceid === 'tblSchoolDesk') {
-            workspaceItem.rotation[1] = ((item.rotation - 180) * -(Math.PI / 180));
-        }
-
-        /* turn the couch 90 deg when converting from VRC to Designer */
-        if (item.data_deviceid === 'couch') {
-            workspaceItem.scale = [item.height, 1, 1]
-            workspaceItem.rotation[1] = (item.rotation - 90) * -(Math.PI / 180);
-        }
-
-        /* The Workspace handles trapezoid/tappered tables differently than the VRC.  Make the conversion */
-        if (item.data_deviceid === 'tblTrap') {
-            if (item.data_trapNarrowWidth < item.width) {
-                workspaceItem.width = Number(item.data_trapNarrowWidth);
-                workspaceItem.taper = item.width - item.data_trapNarrowWidth;
-            }
-            else {
-                workspaceItem.width = Number(item.width); /* if data_trapNarrowWidth > table.width, just use the table.width */
-                workspaceItem.taper = 0;
-            }
-        }
-
-        workspaceItem = { ...workspaceItem, ...attr };
-        delete workspaceItem.idRegex;
-
-        if ('data_role' in item && item.data_role) {
-            workspaceItem.role = item.data_role.value;
-        }
-
-        if ('data_color' in item && item.data_color) {
-            workspaceItem.color = item.data_color.value;
-        }
-
-        if ('data_mount' in item && item.data_mount) {
-            workspaceItem.mount = item.data_mount.value;
-        }
-
-        if (item.data_hiddenInDesigner) {
-            workspaceItem.hidden = true;
-        }
-
-        if ('yOffset' in workspaceItem) {
-            delete workspaceItem.yOffset;
-        }
-
-        if ('xOffset' in workspaceItem) {
-            delete workspaceItem.xOffset;
-        }
-
-        if ('data_labelField' in item) {
-            workspaceItem = parseDataLabelFieldJson(item, workspaceItem);
-        }
-
-        workspaceObj.customObjects.push(workspaceItem);
-    }
-
-    function workspaceObjWallPush(item) {
-
-        let swapXY = true;
-
-        let x, y, z, verticalHeight, workspaceItem;
-
-        let xy = getItemCenter(item);
-
-        let attr = workspaceKey[item.data_deviceid];
-
-        x = (xy.x - roomObj2.room.roomWidth / 2);
-        y = (xy.y - roomObj2.room.roomLength / 2);
-
-        verticalHeight = defaultWallHeight;
-
-        if ('data_vHeight' in item && item.data_vHeight) {
-            verticalHeight = item.data_vHeight;
-        } else {
-            verticalHeight = roomObj2.room.roomHeight || defaultWallHeight;
-        }
-
-        if (isNaN(verticalHeight)) {
-            verticalHeight = Number(defaultWallHeight);
-        }
-
-        if ('data_zPosition' in item) {
-            if (item.data_zPosition != "") {
-                z = item.data_zPosition + (verticalHeight / 2);
-            } else {
-                z = (verticalHeight / 2);
-            }
-
-        } else {
-            z = (verticalHeight / 2);
-        }
-
-        if (item.data_deviceid === 'sphere') {
-            z = item.data_zPosition + (item.width / 2);
-        }
-
-
-
-
-        /* Fix hundreths place rounding error messing with placement of carpet to keep it from overlapping with table base */
-        if (item.data_deviceid === 'carpet') {
-            z = Math.round((z - 0.005) * 100) / 100;
-        }
-
-        workspaceItem = {
-            "objectType": "wall",
-            id: item.id,
-            "position": [
-                (swapXY ? x : y),
-                z,
-                (swapXY ? y : x)
-            ],
-            "rotation": [
-                ((item.data_slant) * -(Math.PI / 180)) || 0,
-                ((item.rotation - 90) * -(Math.PI / 180)),
-                ((item.data_tilt) * (Math.PI / 180)) || 0,
-            ],
-            "height": verticalHeight,
-            "length": item.width,
-            "width": item.height,
-        }
-
-        if (item.data_deviceid === 'boxRoomPart' || item.data_deviceid === 'polyRoom') {
-            workspaceItem.hidden = true;
-            workspaceItem.opacity = 0.01;
-        }
-
-        if (item.data_deviceid === 'sphere') {
-            workspaceItem.radius = item.width / 2;
-            delete workspaceItem.width;
-            delete workspaceItem.height;
-            delete workspaceItem.rotation;
-        }
-
-        if (item.data_deviceid === 'cylinder') {
-            workspaceItem.radius = item.width / 2;
-            // workspaceItem.length = item.data_vHeight;
-            if ('data_vHeight' in item && item.data_vHeight) {
-                workspaceItem.length = item.data_vHeight;
-            } else {
-                workspaceItem.length = roomObj2.room.roomHeight || defaultWallHeight;
-            }
-
-            workspaceItem.rotation[0] = ((item.data_tilt) * (Math.PI / 180)) || 0;
-            workspaceItem.rotation[1] = ((item.rotation) * -(Math.PI / 180)) || 0;
-            workspaceItem.rotation[2] = ((item.data_slant) * (Math.PI / 180)) || 0;
-
-            delete workspaceItem.width;
-            delete workspaceItem.height;
-        }
-
-
-
-        if (item.id === 'primaryCeiling') {
-            workspaceItem.scale = [item.height, verticalHeight, item.width];
-            workspaceItem.objectType = 'ceiling';
-            delete workspaceItem.height;
-            delete workspaceItem.length;
-            delete workspaceItem.width;
-        }
-
-
-        workspaceItem = { ...workspaceItem, ...attr };
-        delete workspaceItem.idRegex;
-
-        if ('data_role' in item && item.data_role) {
-            workspaceItem.role = item.data_role.value;
-        }
-
-        if ('data_color' in item && item.data_color) {
-            workspaceItem.color = item.data_color.value;
-        }
-
-        if ('data_mount' in item && item.data_mount) {
-            workspaceItem.mount = item.data_mount.value;
-        }
-
-        if (item.data_hiddenInDesigner) {
-            workspaceItem.hidden = true;
-        }
-
-
-        if ('data_labelField' in item) {
-            workspaceItem = parseDataLabelFieldJson(item, workspaceItem);
-        }
-
-        workspaceObj.customObjects.push(workspaceItem);
-    }
-
-
-    return workspaceObj;
-
 }
 
-function parseDataLabelFieldJson(item, workspaceItem) {
 
-    let commentPart;
-    //  let jsonPart = /{.*?}/.exec(item.data_labelField);
-    let jsonPart = /{.*}/.exec(item.data_labelField);
-
-    if ('data_labelField' in item && item.data_labelField) {
-        commentPart = item.data_labelField.replace(/{.*?}/g, '');
-    }
-
-    if (jsonPart) {
-        try {
-            let newKeyValues = JSON.parse(jsonPart[0]);
-            workspaceItem = { ...workspaceItem, ...newKeyValues }
-        } catch {
-            console.info('Error parsing JSON ', jsonPart);
-        }
-    }
-
-    if (commentPart && workspaceItem) {
-        workspaceItem.comment = commentPart.trim();
-    }
-
-    return workspaceItem;
-}
+// parseDataLabelFieldJson is now imported from workspace/workspaceExport.js
 
 /* parse out {"path:": "values"} from the data_labelField.  */
 function parsePathShapeLabelFieldJson(item) {
@@ -20350,19 +17266,7 @@ function combinePathShapeLabel(label, path) {
 
 
 
-function downloadJsonWorkpaceFile(workspaceObj) {
-
-    let downloadRoomName;
-    const link = document.createElement("a");
-    const content = JSON.stringify(workspaceObj, null, 5);
-    const file = new Blob([content], { type: 'text/plain' });
-    link.href = URL.createObjectURL(file);
-    downloadRoomName = workspaceObj.title.replace(/[/\\?%*:|"<>]/g, '-');
-    downloadRoomName = downloadRoomName.trim() + '.json';
-    link.download = downloadRoomName;
-    link.click();
-    URL.revokeObjectURL(link.href);
-}
+// downloadJsonWorkpaceFile is now imported from workspace/workspaceExport.js
 
 /* download native VRC file format */
 function downloadRoomObj() {
@@ -20926,6 +17830,114 @@ function isObjectEmpty(obj) {
     }
     return Object.keys(obj).length === 0;
 }
+
+// Export functions to window for HTML onclick handlers (required for ES modules)
+Object.assign(window, {
+    // Dialog and navigation
+    openNewRoomDialog,
+    openSaveDialog,
+    openQuestionDialog,
+    openModalWorkspace,
+    openWorkspaceWindow,
+    openWorkspaceWindow2,
+    openTab,
+    openTabBottom,
+    openSubTab,
+    openSubTab2,
+    closeAllDialogModals,
+    onDialogClick,
+
+    // Undo/Redo
+    btnUndoClicked,
+    btnRedoClicked,
+
+    // Room and canvas controls
+    updateButtonRoomDimensions,
+    showNewRoomSection,
+    showEntireFloor,
+    gridLinesVisible,
+    labelsVisible,
+    toggleLabels,
+    snapChange,
+    snapRotationOffChange,
+    zoomInOut,
+    toggleSelectPan,
+    toggleFeetMeters,
+    defaultUnitChange,
+    convertMetersFeet,
+
+    // Wall builder
+    wallBuilderOn,
+    wallBuilderOn2,
+    wallBuilderRestart,
+    changeWallBuilderWall,
+    btnWallSelected,
+    doorSelected,
+    convertDefaultWallsOff,
+    removeDefaultWallsChange,
+    updateDefaultWallsMenuAndCanvas,
+
+    // Tools
+    measuringToolOn,
+    select2Points,
+    polyBuilderOn,
+    simplePathEditor,
+
+    // Item operations
+    updateItem,
+    updateMultipleItems,
+    deleteTrNodes,
+    duplicateItems,
+    quickAddFromButton,
+    quickUpdateButton,
+    toggleQuickAdd,
+    toggleHighlightItem,
+
+    // Coverage toggles
+    toggleMicShadingSingleItem,
+    toggleSpeakerShadingSingleItem,
+    toggleCamShadeSingleItem,
+    toggleDisplayDistanceSingleItem,
+
+    // File operations
+    downloadJsonFile,
+    downloadRoomObj,
+    downloadFileWorkspace,
+    copyLinkToClipboard,
+    loadTemplate,
+
+    // Background image
+    changeLayerBackgroundImageFl,
+    updateBackgroundImageScale,
+    deleteBackgroundImageConfirmation,
+
+    // Display options
+    showNonWorkspaceItems,
+    showTiltSlant,
+    addCeilingChange,
+    changeTheme,
+    floatingWorkspaceResize,
+
+    // Drag and drop
+    allowDrop,
+    drop,
+    dragStart,
+    drag,
+    dragEnd,
+
+    // Menu functions
+    toggleMoreMenu,
+    closeOpenSidebar,
+
+    // UI controls
+    changeTransparency,
+    onQuickAddChange,
+
+    // Also expose key globals that may be needed
+    roomObj,
+    stage,
+    canvasToJson
+});
 
 /*
     Attribution:

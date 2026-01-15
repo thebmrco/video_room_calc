@@ -1,4 +1,11 @@
-const templates = [
+/**
+ * VRC - Video Room Calculator
+ * Room Templates
+ *
+ * Pre-defined room configurations for common video conferencing setups.
+ */
+
+export const templates = [
   {
     id: 'round-angle',
     name: 'Round corner table at angle',
@@ -82,5 +89,7 @@ const templates = [
 
   },
 
-]
+];
+
+export default templates;
 

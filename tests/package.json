@@ -1,0 +1,9 @@
+{
+  "name": "vrc-tests",
+  "version": "1.0.0",
+  "description": "Unit tests for VRC refactored modules",
+  "type": "module",
+  "scripts": {
+    "test": "node runTests.js"
+  }
+}
