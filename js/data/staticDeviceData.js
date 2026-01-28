@@ -7,6 +7,13 @@
  */
 
 import { DISPLAY_DEFAULTS } from './deviceCatalog.js';
+import {
+    PTZ_4K_EXTENDED_REACH,
+    PTZ_4K_PRESENTER_TRACK,
+    ROOM_VISION_EXTENDED_REACH,
+    ROOM_VISION_PRESENTER_TRACK,
+    generateRoomBarProMultiLensReach
+} from './cameraConeSettings.js';
 
 // ============================================
 // PTZ CAMERA CONFIGURATION
@@ -30,19 +37,11 @@ const roomVisionRoles = [
     { crossviewPresenterTrack: 'Cross-View & PresenterTrack' }
 ];
 
-const ptz4kExtendedReach = {
-    wideHorizontalFOV: 33,
-    teleHorizontalFOV: 33,
-    onePersonDistance: 8,
-    twoPersonDistance: 18
-};
-
-const ptz4kPresenterTrack = {
-    wideHorizontalFOV: 33,
-    teleHorizontalFOV: 33,
-    onePersonDistance: 8,
-    twoPersonDistance: 16
-};
+// Use centralized cone settings for PTZ cameras
+const ptz4kExtendedReach = PTZ_4K_EXTENDED_REACH;
+const ptz4kPresenterTrack = PTZ_4K_PRESENTER_TRACK;
+const roomVisionExtendedReach = ROOM_VISION_EXTENDED_REACH;
+const roomVisionPresenterTrack = ROOM_VISION_PRESENTER_TRACK;
 
 // ============================================
 // VIDEO DEVICES (key starts with A)
@@ -89,9 +88,9 @@ const camerasData = [
     { name: "Quad Camera", id: 'quadCam', key: 'CC', wideHorizontalFOV: 83, teleHorizontalFOV: 50, onePersonDistance: 5.96, twoPersonDistance: 10.96, teleFullWidth: true, topImage: 'quadCam-top.png', frontImage: 'quadCam-front.png', width: 950, depth: 102.5, height: 120, defaultVert: 890, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }], speakerRadius: 4000, speakerDeg: 140, workspaceDesigner: { objectType: 'camera', model: 'quad', role: 'crossview', yOffset: 0.076 } },
     { name: "_Quad Cam Extended (720p)", id: 'quadCamExt', key: 'CD', wideHorizontalFOV: 83, teleHorizontalFOV: 50, onePersonZoom: 4, twoPersonZoom: 4, teleFullWidth: true, topImage: 'quadCamExt-top.png', frontImage: 'quadCamExt-front.png', width: 950, depth: 102.5, height: 120, defaultVert: 890, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }], workspaceDesigner: { objectType: 'camera', model: 'quad', role: 'crossview', yOffset: 0.076 } },
     { name: "_Quad Cam + PTZ 4K Extended*", id: 'quadPtz4kExt', key: 'CE', wideHorizontalFOV: 83, teleHorizontalFOV: 50, onePersonZoom: 2.64, twoPersonZoom: 5, teleFullWidth: true, topImage: 'quadPtz4kExt-top.png', frontImage: 'quadPtz4kExt-front.png', width: 950, depth: 200.2, height: 177.5, displayOffSetY: 60, defaultVert: 1900, workspaceDesigner: { objectType: 'camera', model: 'quad', role: 'crossview', yOffset: 0.076 } },
-    { name: "_Room Vision PTZ", id: 'ptzVision', key: 'CF', wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 5, twoPersonDistance: 10, topImage: 'ptzVision-top.png', frontImage: 'ptzVision-menu.png', width: 165, depth: 248, height: 193, cameraShadeOffSet: 34, defaultVert: 1900, mounts: ptzCameraMounts, roles: ptzCameraRoles, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }], extended_reach: { wideHorizontalFOV: 33, teleHorizontalFOV: 33, onePersonDistance: 13, twoPersonDistance: 26 }, presentertrack: { wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 10, twoPersonDistance: 22 }, presentertrack2: { wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 10, twoPersonDistance: 22 }, rolesDialog: 'How do you want to use the camera?', workspaceDesigner: { objectType: 'camera', model: 'vision', role: 'extended_reach', yOffset: 0.121 } },
+    { name: "_Room Vision PTZ", id: 'ptzVision', key: 'CF', wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 5, twoPersonDistance: 10, topImage: 'ptzVision-top.png', frontImage: 'ptzVision-menu.png', width: 165, depth: 248, height: 193, cameraShadeOffSet: 34, defaultVert: 1900, mounts: ptzCameraMounts, roles: ptzCameraRoles, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }], extended_reach: roomVisionExtendedReach, presentertrack: roomVisionPresenterTrack, presentertrack2: roomVisionPresenterTrack, rolesDialog: 'How do you want to use the camera?', workspaceDesigner: { objectType: 'camera', model: 'vision', role: 'extended_reach', yOffset: 0.121 } },
     { name: "_PTZ 4K & Bracket", id: 'ptz4kMount', key: 'CG', wideHorizontalFOV: 70, teleHorizontalFOV: 70, onePersonZoom: 2.4, twoPersonZoom: 3, topImage: 'ptz4kMount-top.png', frontImage: 'ptz4kMount-menu.png', width: 158.4, depth: 290, height: 177.5, cameraShadeOffSet: 50, displayOffSetY: 60, defaultVert: 1900, mounts: ptzCameraMounts, roles: ptzCameraRoles, extended_reach: ptz4kExtendedReach, presentertrack: ptz4kPresenterTrack, presentertrack2: ptz4kPresenterTrack, rolesDialog: 'How do you want to use the camera?', workspaceDesigner: { objectType: 'camera', model: 'ptz', role: 'extended_reach', yOffset: 0.144 } },
-    { name: "Room Vision PTZ Cam & Bracket", id: 'ptzVision2', key: 'CH', wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 5, twoPersonDistance: 10, topImage: 'ptzVision-top.png', frontImage: 'ptzVision-menu.png', width: 165, depth: 248, height: 193, cameraShadeOffSet: 34, defaultVert: 1900, mounts: ptzCameraMounts, roles: roomVisionRoles, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }], extended_reach: { wideHorizontalFOV: 33, teleHorizontalFOV: 33, onePersonDistance: 13, twoPersonDistance: 26 }, presentertrack: { wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 10, twoPersonDistance: 22 }, presentertrack2: { wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 10, twoPersonDistance: 22 }, rolesDialog: 'How do you want to use the camera?', workspaceDesigner: { objectType: 'camera', model: 'vision', role: 'extended_reach', yOffset: 0.121 } },
+    { name: "Room Vision PTZ Cam & Bracket", id: 'ptzVision2', key: 'CH', wideHorizontalFOV: 80, teleHorizontalFOV: 80, onePersonDistance: 5, twoPersonDistance: 10, topImage: 'ptzVision-top.png', frontImage: 'ptzVision-menu.png', width: 165, depth: 248, height: 193, cameraShadeOffSet: 34, defaultVert: 1900, mounts: ptzCameraMounts, roles: roomVisionRoles, colors: [{ light: 'First Light' }, { dark: 'Carbon Black' }], extended_reach: roomVisionExtendedReach, presentertrack: roomVisionPresenterTrack, presentertrack2: roomVisionPresenterTrack, rolesDialog: 'How do you want to use the camera?', workspaceDesigner: { objectType: 'camera', model: 'vision', role: 'extended_reach', yOffset: 0.121 } },
     { name: "PTZ 4K Cam & Bracket", id: 'ptz4kMount2', key: 'CI', wideHorizontalFOV: 70, teleHorizontalFOV: 70, onePersonZoom: 2.4, twoPersonZoom: 3, topImage: 'ptz4kMount-top.png', frontImage: 'ptz4kMount-menu.png', width: 158.4, depth: 290, height: 177.5, cameraShadeOffSet: 50, displayOffSetY: 60, defaultVert: 1900, mounts: ptzCameraMounts, roles: ptzCameraRoles, extended_reach: ptz4kExtendedReach, presentertrack: ptz4kPresenterTrack, presentertrack2: ptz4kPresenterTrack, rolesDialog: 'How do you want to use the camera?', workspaceDesigner: { objectType: 'camera', model: 'ptz', role: 'extended_reach', yOffset: 0.144 } },
 ];
 
@@ -246,16 +245,15 @@ const roomsData = [
 /**
  * Add multiLensReach configuration to Room Bar Pro.
  * This is applied during expansion.
+ * Uses the centralized generateRoomBarProMultiLensReach function.
  */
 function addMultiLensReach(videoDevices) {
     const roomBarPro = videoDevices.find(d => d.id === 'roomBarPro');
     if (roomBarPro) {
-        roomBarPro.multiLensReach = [
-            { rotation: roomBarPro.teleHorizontalFOV / 2 + 90, teleAngle: 13, onePersonDistance: 2.5, twoPersonDistance: 6.85 },
-            { rotation: (180 - roomBarPro.wideHorizontalFOV) / 2 + ((roomBarPro.wideHorizontalFOV - roomBarPro.teleHorizontalFOV) / 2) - 13, teleAngle: 13, onePersonDistance: 2.5, twoPersonDistance: 6.85 },
-            { rotation: roomBarPro.teleHorizontalFOV / 2 + 90 + 13, teleAngle: 20, onePersonDistance: 1.4, twoPersonDistance: 4 },
-            { rotation: (180 - roomBarPro.wideHorizontalFOV) / 2, teleAngle: 20, onePersonDistance: 1.4, twoPersonDistance: 4 },
-        ];
+        roomBarPro.multiLensReach = generateRoomBarProMultiLensReach(
+            roomBarPro.wideHorizontalFOV,
+            roomBarPro.teleHorizontalFOV
+        );
     }
 }
 
