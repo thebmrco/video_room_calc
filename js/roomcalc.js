@@ -53,7 +53,9 @@ import {
     convertToMeters as convertToMetersCore,
     parseDataLabelFieldJson,
     addDefaultsToWorkspaceObj,
-    downloadJsonWorkspaceFile as downloadJsonWorkpaceFile
+    downloadJsonWorkspaceFile as downloadJsonWorkpaceFile,
+    workspacePostMessage,
+    getWorkspaceDesignerUrl
 } from './workspace/index.js';
 
 // Proxy for workspaceKey to maintain backward compatibility
@@ -2748,7 +2750,7 @@ function getQueryString() {
 
     if (testiFrame) {
         console.info('Testing iFrame is turned On. To turn off use ?testiFrame=0');
-
+        workspacePostMessage.setTestiFrame(true);
     }
 
     if (urlParams.has('wd')) {
@@ -2787,6 +2789,7 @@ function getQueryString() {
         let regex = /^https:\/\/www\.webex\.com\//i
         if (!regex.test(workspaceDesignerTestUrl)) {
             testiFrame = true;
+            workspacePostMessage.setTestiFrame(true);
         }
 
         wdSiteDiv.style.display = '';
@@ -4116,6 +4119,7 @@ function makeButtonsVisible() {
         document.getElementById('downloadButtons').style.display = 'none';
         document.getElementById('RoomOSmessage').setAttribute('style', 'visibility: visible;');
         testiFrame = true;
+        workspacePostMessage.setTestiFrame(true);
     }
     else if (qrCodeButtonsVisible == true || mobileDevice === 'Tesla') {
         document.getElementById('RoomOSmessage').setAttribute('style', 'visibility: visible;');
@@ -14995,6 +14999,7 @@ function testiFrameToggle(allowClose = false) {
 
         if (testiFrameInitialized === false) {
             testiFrameInitialized = true;
+            workspacePostMessage.setTestiFrameInitialized(true);
             openWorkspaceWindow(false);
             floatingWorkspaceResize('slideOver');
             // setTimeout(() => {
@@ -17025,25 +17030,21 @@ function openWorkspaceWindow2() {
 
 function openWorkspaceWindow(fromButton = true) {
 
-    let currentSite = location.origin + location.pathname;
-    console.info('Current WD site:', currentSite);
-
-    /* any site that is not https://collabexperience.com/ will redirect to designer.cisco.com */
-    if (currentSite != 'https://collabexperience.com/') {
-        newWorkspaceTab = defaultWorkspaceTestSite;
-        console.info('WD site: ', newWorkspaceTab);
-    }
+    // Use the getWorkspaceDesignerUrl helper to determine the correct URL
+    newWorkspaceTab = getWorkspaceDesignerUrl(
+        location.origin,
+        location.pathname,
+        workspaceDesignerTestUrl
+    );
+    console.info('WD site:', newWorkspaceTab);
 
     lastAction = "btnClick Workspace Designer";
 
     postHeartbeat();
 
-    if (workspaceDesignerTestUrl) {
-        newWorkspaceTab = workspaceDesignerTestUrl;
-    }
-
     if (fromButton) {
         workspaceWindow = window.open(newWorkspaceTab, sessionId);
+        workspacePostMessage.setWorkspaceWindow(workspaceWindow);
     }
 
 
@@ -17053,21 +17054,15 @@ function openWorkspaceWindow(fromButton = true) {
         // iFrameWorkspaceWindow.src = newWorkspaceTab + '?preview=1&embed=1';
 
         iFrameWorkspaceWindow.src = newWorkspaceTab;
+        workspacePostMessage.setIFrameWorkspaceWindow(iFrameWorkspaceWindow);
     }
 
+    // Update testiFrame state in the postMessage manager
+    workspacePostMessage.setTestiFrame(testiFrame);
+    workspacePostMessage.setTestiFrameInitialized(testiFrameInitialized);
 
     /* send initial post message 3 times in case page is opening slow */
-    setTimeout(() => {
-        postMessageToWorkspace();
-    }, 1000);
-
-    setTimeout(() => {
-        postMessageToWorkspace();
-    }, 3000);
-
-    setTimeout(() => {
-        postMessageToWorkspace();
-    }, 5000);
+    workspacePostMessage.sendInitialMessages();
 
 }
 
@@ -17090,58 +17085,29 @@ function openDetailsRoomTab() {
 }
 
 
+/**
+ * Send room configuration to Workspace Designer via postMessage.
+ * Uses the workspacePostMessage module for cross-origin communication.
+ */
 function postMessageToWorkspace() {
-
-    let unit = 'meter';
-    let message = {};
-
-    if (roomObj.unit === 'feet') {
-        unit = 'foot'
-    }
-
-    message = { roomdesigner: { plan: exportRoomObjToWorkspace(), settings: { unit: unit } } }
-
-
-    message.roomdesigner.plan.theme = roomObj.workspace.theme || 'standard';
-
-    // message.roomdesigner.settings.roomView = 'farEnd'; // overview | farEnd | tableEnd | above | cameraCoverage | micCoverage | displayCoverage | accessibility | cables
-    // message.roomdesigner.settings.occupancy = 'medium';  // empty | medium | full
-
-    if (workspaceWindow) {
-        workspaceWindow.postMessage(message, '*');
-    }
-
-    if (testiFrame && testiFrameInitialized) {
-        iFrameWorkspaceWindow.contentWindow.postMessage(message, '*');
-    }
-
-
+    workspacePostMessage.postMessage();
 }
 
-window.addEventListener(
-    "message",
-    (event) => {
-        if (event.origin.match(/https:\/\/.*(\.cisco|\.webex|)\.com$/) || event.origin.startsWith('https://collabexperience.com') || event.origin.startsWith('http://127.0.0.1')) {
-            console.info('message received postMessage() back: ', event.data);
-
-            // Handle commands from parent iframe
-            if (event.data && typeof event.data === 'object') {
-                // Control hideNewRoomDialog setting
-                if ('hideNewRoomDialog' in event.data) {
-                    hideNewRoomDialog = !!event.data.hideNewRoomDialog;
-                    console.info('hideNewRoomDialog set to:', hideNewRoomDialog);
-                }
-
-                // Load a room from postMessage
-                if (event.data.loadRoom && typeof event.data.loadRoom === 'string') {
-                    loadTemplate(event.data.loadRoom);
-                    console.info('Room loaded from postMessage');
-                }
-            }
-        }
+// Initialize workspacePostMessage manager with callbacks
+workspacePostMessage.configure({
+    onLoadRoom: (templateName) => {
+        loadTemplate(templateName);
     },
-    false,
-);
+    onHideNewRoomDialogChange: (value) => {
+        hideNewRoomDialog = value;
+    },
+    getExportData: () => exportRoomObjToWorkspace(),
+    getRoomUnit: () => roomObj.unit,
+    getWorkspaceTheme: () => roomObj.workspace?.theme || 'standard'
+});
+
+// Initialize the message listener
+workspacePostMessage.init();
 
 /* addDefaultsToWorkspaceObj() - looks at workspaceKey and compares to videoDevices, chairs, displays and microphones and adds the first role, model or color to the workspaceKey - overwriting if it already exists */
 // Now imported from workspace/workspaceExport.js

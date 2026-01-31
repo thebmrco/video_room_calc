@@ -12,3 +12,12 @@ export {
     addDefaultsToWorkspaceObj,
     downloadJsonWorkspaceFile
 } from './workspaceExport.js';
+
+export {
+    WorkspacePostMessageManager,
+    workspacePostMessage,
+    getWorkspaceDesignerUrl,
+    ALLOWED_ORIGINS,
+    WORKSPACE_DESIGNER_URLS,
+    INIT_MESSAGE_DELAYS
+} from './workspacePostMessage.js';
