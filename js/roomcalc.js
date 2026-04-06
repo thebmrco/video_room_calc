@@ -17149,6 +17149,10 @@ addDefaultsToWorkspaceObj(videoDevices, microphones, displays, chairs);
 
 
 
+function getNativeRoomObj() {
+    return structuredClone(roomObj);
+}
+
 function exportRoomObjToWorkspace() {
     return exportRoomObjToWorkspaceCore(roomObj, {
         activeRoomX,
@@ -17837,6 +17841,7 @@ Object.assign(window, {
     // Import/Export (for iframe embedding)
     importWorkspaceDesignerFile,
     exportRoomObjToWorkspace,
+    getNativeRoomObj,
     drawRoom,
 
     // Dialog and navigation
