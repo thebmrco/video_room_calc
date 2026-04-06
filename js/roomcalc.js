@@ -17840,6 +17840,7 @@ function isObjectEmpty(obj) {
 Object.assign(window, {
     // Import/Export (for iframe embedding)
     importWorkspaceDesignerFile,
+    importJson,
     exportRoomObjToWorkspace,
     getNativeRoomObj,
     drawRoom,
