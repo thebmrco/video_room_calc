@@ -20190,6 +20190,10 @@ function addDefaultsToWorkspaceObj() {
 
 
 
+function getNativeRoomObj() {
+    return structuredClone(roomObj);
+}
+
 function exportRoomObjToWorkspace() {
 
     let swapXY = true;
