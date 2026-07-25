@@ -201,6 +201,7 @@ let testProduction = false; /* For forcing to test production crosslaunch */
 let testNew = false; /* used to toggle on new features */
 let testiFrame = false; /* testing iFrame settings, only works on internal Cisco Workspace Designer test site */
 let testiFrameInitialized = false; /* Keep track if the testing iFrame settings */
+let hideNewRoomDialog = false; /* When true, suppresses the new room dialog (useful when embedded in iframe) */
 let testOffset = false; /* shows a field that configures xOffset and yOffset which is used in the items workspaceKey */
 
 let zoomScaleX = 1;  /* zoomScaleX zoomScaleY used clicking the + or - button to zoom. */
@@ -4372,6 +4373,15 @@ function getQueryString() {
     roomName = DOMPurify.sanitize(roomName);
     roomObj.name = roomName;
 
+    /* hideNewRoomDialog - must be parsed early, before dialog might be shown */
+    if (urlParams.has('hideNewRoomDialog')) {
+        let hideDialogParam = urlParams.get('hideNewRoomDialog');
+        hideNewRoomDialog = !(hideDialogParam === '0' || hideDialogParam === 'false');
+        if (hideNewRoomDialog) {
+            console.info('New room dialog is hidden. To show use ?hideNewRoomDialog=0');
+        }
+    }
+
     if (urlParams.has('x')) {
         let x = urlParams.get('x');
         parseShortenedXYUrl(x);
@@ -8048,6 +8058,11 @@ function openSaveDialog() {
 }
 
 function openNewRoomDialog() {
+    // Skip showing the dialog if hideNewRoomDialog is enabled (e.g., when embedded in iframe)
+    if (hideNewRoomDialog) {
+        console.info('New room dialog suppressed (hideNewRoomDialog=true)');
+        return;
+    }
     document.getElementById('roomWidth2').value = roomObj.room.roomWidth;
     document.getElementById('roomLength2').value = roomObj.room.roomLength;
     document.getElementById('roomName2').value = roomObj.name;
